@@ -16,17 +16,25 @@ static size_t simple_instruction(const char *name, int offset) {
 }
 
 static size_t constant_instruction(const char *name, segment *s, int offset) {
-    uint16_t constant = *(uint16_t*) &(s->bytecode[offset+1]);
+    uint8_t constant = s->bytecode[offset+1];
     printf("%-16s %5d '", name, constant);
     print_value(s->constants.values[constant]);
     printf("'\n");
-    return offset + 3;
+    return offset + 2;
+}
+
+static size_t constant_long_instruction(const char *name, segment *s, int offset) {
+    uint32_t constant = (s->bytecode[offset+1] << 16) + (s->bytecode[offset+2] << 8) + (s->bytecode[offset+3]);
+    printf("%-16s %5d '", name, constant);
+    print_value(s->constants.values[constant]);
+    printf("'\n");
+    return offset + 4;
 }
 
 size_t dissassemble_instruction(segment *s, size_t offset) {
     printf("%08lu ", offset);
     if (offset > 0 && s->lines[offset] == s->lines[offset-1]) {
-        printf("    | ");
+        printf("   | ");
     }
     else {
         printf("%4d ", s->lines[offset]);
@@ -37,6 +45,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_RETURN", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
+        case OP_CONSTANT_LONG:
+            return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
         default:
             fprintf(stderr, "Unrecognised opcode %d in bytecode, halting dissassembly.\n", instruction);
             return s->len;

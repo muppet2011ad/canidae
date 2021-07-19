@@ -25,7 +25,7 @@ void destroy_value_array(value_array *arr) {
 }
 
 void print_value(value val) {
-    char bool_strings[2][6]= {"true", "false"};
+    char bool_strings[2][6]= {"false", "true"};
     switch (val.type) {
         case NUM_TYPE:
             printf("%g", val.as.number);
