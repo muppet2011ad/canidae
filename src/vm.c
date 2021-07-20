@@ -1,29 +1,46 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
 #include "compiler.h"
+#include "memory.h"
 
 static void resetStack(VM *vm) {
     vm->stack_ptr = vm->stack;
 }
 
 void init_VM(VM *vm) {
+    vm->stack = calloc(STACK_INITIAL, sizeof(value));
+    if (vm->stack == NULL) {
+        fprintf(stderr, "Out of memory.");
+    }
+    vm->stack_len = 0;
+    vm->stack_capacity = STACK_INITIAL;
     resetStack(vm);
 }
 
 void destroy_VM(VM *vm) {
-
+    free(vm->stack);
 }
 
 void push(VM *vm, value val) {
+    if (vm->stack_len >= vm->stack_capacity) {
+        size_t old_capacity = vm->stack_capacity;
+        size_t ptr_diff = ((size_t) vm->stack_ptr - (size_t) vm->stack)/sizeof(value);
+        vm->stack_capacity = GROW_CAPACITY(old_capacity);
+        vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
+        vm->stack_ptr = vm->stack + ptr_diff;
+    }
     *vm->stack_ptr = val;
     vm->stack_ptr++;
+    vm->stack_len++;
 }
 
 value pop(VM *vm) {
     vm->stack_ptr--;
+    vm->stack_len--;
     return *vm->stack_ptr;
 }
 

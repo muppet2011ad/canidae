@@ -4,12 +4,14 @@
 
 #include "segment.h"
 
-#define STACK_MAX 256
+#define STACK_INITIAL 256
 
 typedef struct {
     segment *s;
     uint8_t *ip;
-    value stack[STACK_MAX];
+    value *stack;
+    size_t stack_len;
+    size_t stack_capacity;
     value *stack_ptr;
 } VM;
 
