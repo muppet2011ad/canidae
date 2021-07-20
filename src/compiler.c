@@ -25,6 +25,7 @@ typedef enum {
     PREC_TERM,
     PREC_FACTOR,
     PREC_UNARY,
+    PREC_POWER,
     PREC_CALL,
     PREC_PRIMARY
 } precedence;
@@ -134,6 +135,7 @@ static void binary(parser *p) {
         case TOKEN_MINUS: emit_byte(p, OP_SUBTRACT); break;
         case TOKEN_STAR: emit_byte(p, OP_MULTIPLY); break;
         case TOKEN_SLASH: emit_byte(p, OP_DIVIDE); break;
+        case TOKEN_CARET: emit_byte(p, OP_POWER); break;
         default: return;
     }
 
@@ -174,6 +176,7 @@ parse_rule rules[] = {
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_FACTOR},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
+    [TOKEN_CARET] = {NULL, binary, PREC_POWER},
     [TOKEN_BANG] = {NULL, NULL, PREC_NONE},
     [TOKEN_BANG_EQUAL] = {NULL, NULL, PREC_NONE},
     [TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},

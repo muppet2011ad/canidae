@@ -53,6 +53,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_MULTIPLY", offset);
         case OP_DIVIDE:
             return simple_instruction("OP_DIVIDE", offset);
+        case OP_POWER:
+            return simple_instruction("OP_POWER", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_CONSTANT_LONG:

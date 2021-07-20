@@ -187,6 +187,7 @@ token scan_token(scanner *s) {
         case '+': return make_token(s, TOKEN_PLUS);
         case '/': return make_token(s, TOKEN_SLASH);
         case '*': return make_token(s, TOKEN_STAR);
+        case '^': return make_token(s, TOKEN_CARET);
         case '!':
             return make_token(s, match(s, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '=':

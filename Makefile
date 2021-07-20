@@ -8,7 +8,7 @@ bin/%.o: src/%.c
 	gcc $(OPTS) -c $< -g -fpic -o $@
 
 main: $(MAIN_DEPS)
-	gcc $(OPTS) -g $(MAIN_DEPS) -o bin/main
+	gcc $(OPTS) -g  -lm $(MAIN_DEPS) -o bin/main
 
 clean:
 	rm bin/*

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
@@ -62,6 +63,11 @@ static interpret_result run(VM *vm) {
             case OP_SUBTRACT: BINARY_OP(-); break;
             case OP_MULTIPLY: BINARY_OP(*); break;
             case OP_DIVIDE: BINARY_OP(/); break;
+            case OP_POWER:
+                double b = AS_NUMBER(pop(vm));
+                double a = AS_NUMBER(pop(vm));
+                push(vm, NUMBER_VAL(pow(a, b)));
+                break;
             case OP_CONSTANT: {
                 value constant = READ_CONSTANT();
                 push(vm, constant);
