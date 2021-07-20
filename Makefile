@@ -1,6 +1,6 @@
 OPTS := -Wall -pedantic -std=c11
 
-MAIN_DEPS := bin/memory.o bin/segment.o bin/main.o bin/debug.o bin/value.o bin/vm.o
+MAIN_DEPS := bin/memory.o bin/segment.o bin/main.o bin/debug.o bin/value.o bin/vm.o bin/compiler.o bin/scanner.o
 
 all: main
 

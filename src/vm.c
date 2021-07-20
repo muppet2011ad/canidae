@@ -2,6 +2,7 @@
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
+#include "compiler.h"
 
 static void resetStack(VM *vm) {
     vm->stack_ptr = vm->stack;
@@ -80,8 +81,10 @@ static interpret_result run(VM *vm) {
     #undef BINARY_OP
 }
 
-interpret_result interpret(VM *vm, segment *s) {
-    vm->s = s;
-    vm->ip = vm->s->bytecode;
-    return run(vm);
+interpret_result interpret(VM *vm, const char *source) {
+    //vm->s = s;
+    //vm->ip = vm->s->bytecode;
+    compile(source);
+    return INTERPRET_OK;
+    //return run(vm);
 }
