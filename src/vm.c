@@ -25,21 +25,15 @@ value pop(VM *vm) {
     return *vm->stack_ptr;
 }
 
-interpret_result interpret(VM *vm, segment *s) {
-    vm->s = s;
-    vm->ip = vm->s->bytecode;
-    return run(vm);
-}
-
 static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
     #define READ_CONSTANT_LONG() (vm->s->constants.values[((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())])
     #define BINARY_OP(op) \
         do { \
-            double b = pop(vm).as.number; \
-            double a = pop(vm).as.number; \
-            push(vm, NUM_AS_VAL(a op b)); \
+            double b = AS_NUMBER(pop(vm)); \
+            double a = AS_NUMBER(pop(vm)); \
+            push(vm, NUMBER_VAL(a op b)); \
         } while (0)
 
 
@@ -84,4 +78,10 @@ static interpret_result run(VM *vm) {
     #undef READ_CONSTANT
     #undef READ_CONSTANT_LONG
     #undef BINARY_OP
+}
+
+interpret_result interpret(VM *vm, segment *s) {
+    vm->s = s;
+    vm->ip = vm->s->bytecode;
+    return run(vm);
 }

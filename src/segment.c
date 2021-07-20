@@ -32,7 +32,7 @@ void write_n_bytes_to_segment(segment *s, uint8_t *bytes, size_t num_bytes, uint
     }
 }
 
-void write_constant_to_segment(segment *s, value val, uint32_t line) {
+uint32_t write_constant_to_segment(segment *s, value val, uint32_t line) { // TODO: make inclusion of instruction optional
     uint32_t c = (uint32_t) add_constant(s, val);
     if (c > UINT8_MAX) {
         if (c > UINT24_MAX) {
@@ -47,6 +47,7 @@ void write_constant_to_segment(segment *s, value val, uint32_t line) {
         write_to_segment(s, OP_CONSTANT, line);
         write_to_segment(s, (uint8_t) c, line);
     }
+    return c;
 }
 
 void destroy_segment(segment *s) {

@@ -22,7 +22,6 @@ typedef enum {
 void init_VM(VM *vm);
 void destroy_VM(VM *vm);
 interpret_result interpret(VM *vm, segment *s);
-static interpret_result run(VM *vm);
 void push(VM *vm, value val);
 value pop(VM *vm);
 

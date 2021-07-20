@@ -28,10 +28,11 @@ void print_value(value val) {
     char bool_strings[2][6]= {"false", "true"};
     switch (val.type) {
         case NUM_TYPE:
-            printf("%g", val.as.number);
+            printf("%g", AS_NUMBER(val));
             break;
-        case BOOL_TYPE:
-            printf("%s", bool_strings[val.as.boolean]);
+        case BOOL_TYPE:;
+            uint8_t b = AS_NUMBER(val);
+            printf("%s", bool_strings[b]);
             break;
         case OBJ_TYPE:
             break;

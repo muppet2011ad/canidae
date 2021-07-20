@@ -58,7 +58,7 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
         default:
-            fprintf(stderr, "Unrecognised opcode %d in bytecode, halting dissassembly.\n", instruction);
+            fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;
     }
 }

@@ -26,7 +26,7 @@ typedef struct {
 void init_segment(segment *s);
 void write_to_segment(segment *s, uint8_t byte, uint32_t line);
 void write_n_bytes_to_segment(segment *s, uint8_t *bytes, size_t num_bytes, uint32_t line);
-void write_constant_to_segment(segment *s, value val, uint32_t line);
+uint32_t write_constant_to_segment(segment *s, value val, uint32_t line);
 void destroy_segment(segment *s);
 size_t add_constant(segment *s, value val);
 
