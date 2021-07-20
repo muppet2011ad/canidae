@@ -31,7 +31,7 @@ static char *read_file(const char *path) {
 
     char *buffer = malloc(file_size+1);
     if (buffer == NULL) {
-        fprintf(stderr, "Out of memory.\n", path);
+        fprintf(stderr, "Out of memory.\n");
         exit(74);
     }
     size_t bytes_read_actual = fread(buffer, sizeof(char), file_size, f);
