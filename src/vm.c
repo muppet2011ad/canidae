@@ -82,9 +82,21 @@ static interpret_result run(VM *vm) {
 }
 
 interpret_result interpret(VM *vm, const char *source) {
-    //vm->s = s;
-    //vm->ip = vm->s->bytecode;
-    compile(source);
-    return INTERPRET_OK;
+    segment seg;
+    init_segment(&seg);
+
+    if (!compile(source, &seg)) {
+        destroy_segment(&seg);
+        return INTERPRET_COMPILE_ERROR;
+    }
+
+    vm->s = &seg;
+    vm->ip = vm->s->bytecode;
+
+    interpret_result result = run(vm);
+
+    destroy_segment(&seg);
+    
+    return result;
     //return run(vm);
 }

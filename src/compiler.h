@@ -2,6 +2,8 @@
 
 #define canidae_compiler_h
 
-void compile(const char *source);
+#include "vm.h"
+
+int compile(const char *source, segment *s);
 
 #endif

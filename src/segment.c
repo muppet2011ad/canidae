@@ -36,12 +36,12 @@ uint32_t write_constant_to_segment(segment *s, value val, uint32_t line) { // TO
     uint32_t c = (uint32_t) add_constant(s, val);
     if (c > UINT8_MAX) {
         if (c > UINT24_MAX) {
-            fprintf(stderr,"Exceeding max number of constants (%d), cannot add constant.", UINT24_MAX); // Add proper error handling
+            //fprintf(stderr,"Exceeding max number of constants (%d), cannot add constant.", UINT24_MAX); // Add proper error handling
+            return UINT32_MAX;
         }
         else {
-            write_to_segment(s, OP_CONSTANT_LONG, line);
-            uint8_t bytes[3] = {c >> 16, c >> 8, c};
-            write_n_bytes_to_segment(s, bytes, 3, line);
+            uint8_t bytes[4] = {OP_CONSTANT_LONG >> 24, c >> 16, c >> 8, c};
+            write_n_bytes_to_segment(s, bytes, 4, line);
         }
     } else {
         write_to_segment(s, OP_CONSTANT, line);
