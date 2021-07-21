@@ -118,7 +118,8 @@ static interpret_result run(VM *vm) {
             case OP_NULL: push(vm, NULL_VAL); break;
             case OP_TRUE: push(vm, BOOL_VAL(1)); break;
             case OP_FALSE: push(vm, BOOL_VAL(0)); break;
-            case OP_NOT: push(vm, BOOL_VAL(is_falsey(pop(vm)))); break; // TODO: Do same optimisation as on OP_NEGATE
+            //case OP_NOT: push(vm, BOOL_VAL(is_falsey(pop(vm)))); break; // TODO: Do same optimisation as on OP_NEGATE
+            case OP_NOT: (vm->stack_ptr-1)->as.boolean = !(vm->stack_ptr-1)->as.boolean; break;
             case OP_EQUAL: {
                 value b = pop(vm);
                 value a = pop(vm);
