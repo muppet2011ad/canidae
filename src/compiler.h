@@ -4,6 +4,6 @@
 
 #include "vm.h"
 
-int compile(const char *source, segment *s);
+int compile(const char* source, segment *seg, object **objects);
 
 #endif

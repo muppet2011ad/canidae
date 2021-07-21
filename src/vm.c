@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <string.h>
 #include <math.h>
 #include "common.h"
 #include "vm.h"
 #include "debug.h"
 #include "compiler.h"
 #include "memory.h"
+#include "object.h"
 
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
@@ -32,10 +34,12 @@ void init_VM(VM *vm) {
     }
     vm->stack_len = 0;
     vm->stack_capacity = STACK_INITIAL;
+    vm->objects = NULL;
     reset_stack(vm);
 }
 
 void destroy_VM(VM *vm) {
+    free_objects(vm->objects);
     free(vm->stack);
 }
 
@@ -64,6 +68,19 @@ static value peek(VM *vm, int distance) {
 
 static uint8_t is_falsey(value v) {
     return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0); // TODO: Make zero-length strings/arrays falsey when implemted
+}
+
+static void concatenate(VM *vm) {
+    object_string *b = AS_STRING(pop(vm));
+    object_string *a = AS_STRING(pop(vm));
+    uint32_t len = a->length + b->length;
+    char *chars = ALLOCATE(char, len + 1);
+    memcpy(chars, a->chars, a->length);
+    memcpy(chars + a->length, b->chars, b->length);
+    chars[len] = '\0';
+
+    object_string *result = take_string(&vm->objects, chars, len);
+    push(vm, OBJ_VAL(result));
 }
 
 static interpret_result run(VM *vm) {
@@ -106,7 +123,20 @@ static interpret_result run(VM *vm) {
                 }
                 (vm->stack_ptr-1)->as.number = -(vm->stack_ptr-1)->as.number;
                 break;
-            case OP_ADD: BINARY_OP(NUMBER_VAL, +); break;
+            case OP_ADD: {
+                if (IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) {
+                    concatenate(vm);
+                }
+                else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
+                    double b = AS_NUMBER(pop(vm));
+                    double a = AS_NUMBER(pop(vm));
+                    push(vm, NUMBER_VAL(a + b));
+                } else {
+                    runtime_error(vm, "Operands must be two numbers or two strings");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
             case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
             case OP_DIVIDE: BINARY_OP(NUMBER_VAL, /); break;
@@ -118,8 +148,7 @@ static interpret_result run(VM *vm) {
             case OP_NULL: push(vm, NULL_VAL); break;
             case OP_TRUE: push(vm, BOOL_VAL(1)); break;
             case OP_FALSE: push(vm, BOOL_VAL(0)); break;
-            //case OP_NOT: push(vm, BOOL_VAL(is_falsey(pop(vm)))); break; // TODO: Do same optimisation as on OP_NEGATE
-            case OP_NOT: (vm->stack_ptr-1)->as.boolean = !(vm->stack_ptr-1)->as.boolean; break;
+            case OP_NOT: push(vm, BOOL_VAL(is_falsey(pop(vm)))); break;
             case OP_EQUAL: {
                 value b = pop(vm);
                 value a = pop(vm);
@@ -153,7 +182,7 @@ interpret_result interpret(VM *vm, const char *source) {
     segment seg;
     init_segment(&seg);
 
-    if (!compile(source, &seg)) {
+    if (!compile(source, &seg, &vm->objects)) {
         destroy_segment(&seg);
         return INTERPRET_COMPILE_ERROR;
     }

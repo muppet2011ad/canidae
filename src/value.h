@@ -11,12 +11,15 @@ typedef enum {
     OBJ_TYPE,
 } value_type;
 
+typedef struct object object;
+typedef struct object_string object_string;
+
 typedef struct {
     value_type type;
     union data {
         double number;
         uint8_t boolean;
-        // Object would go here but I'm not typedeffing that yet
+        object *obj;
     } as;
 
 } value;
@@ -30,9 +33,11 @@ typedef struct {
 #define NUMBER_VAL(n) ((value) {NUM_TYPE, {.number = n}})
 #define BOOL_VAL(n) ((value) {BOOL_TYPE, {.boolean = n}})
 #define NULL_VAL ((value) {NULL_TYPE, {.number = 0}})
+#define OBJ_VAL(o) ((value) {OBJ_TYPE, {.obj = (object*)o}})
 
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v) ((v).as.boolean)
+#define AS_OBJ(v) ((v).as.obj)
 
 #define IS_NUMBER(v) ((v).type == NUM_TYPE)
 #define IS_BOOL(v) ((v).type == BOOL_TYPE)

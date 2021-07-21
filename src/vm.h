@@ -13,6 +13,7 @@ typedef struct {
     size_t stack_len;
     size_t stack_capacity;
     value *stack_ptr;
+    object *objects;
 } VM;
 
 typedef enum {

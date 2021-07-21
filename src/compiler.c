@@ -3,6 +3,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "scanner.h"
+#include "object.h"
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
@@ -41,7 +42,7 @@ typedef enum {
     PREC_PRIMARY
 } precedence;
 
-typedef void (*parse_func)(parser *p);
+typedef void (*parse_func)(parser *p, object **o);
 
 typedef struct {
     parse_func prefix;
@@ -50,8 +51,8 @@ typedef struct {
 } parse_rule;
 
 static parse_rule *get_rule(token_type type);
-static void expression(parser *p);
-static void parse_precedence(parser *p, precedence prec);
+static void expression(parser *p, object **o);
+static void parse_precedence(parser *p, object **o, precedence prec);
 
 segment *compiling_segment;
 
@@ -142,10 +143,10 @@ static void end_compiler(parser *p) {
     #endif
 }
 
-static void binary(parser *p) {
+static void binary(parser *p, object **o) {
     token_type operator = p->prev.type;
     parse_rule *rule = get_rule(operator);
-    parse_precedence(p, rule->prec + 1);
+    parse_precedence(p, o, rule->prec + 1);
     switch (operator) {
         case TOKEN_PLUS: emit_byte(p, OP_ADD); break;
         case TOKEN_MINUS: emit_byte(p, OP_SUBTRACT); break;
@@ -163,7 +164,7 @@ static void binary(parser *p) {
 
 }
 
-static void literal(parser *p) {
+static void literal(parser *p, object **o) {
     switch (p->prev.type) {
         case TOKEN_FALSE: emit_byte(p, OP_FALSE); break;
         case TOKEN_NULL: emit_byte(p, OP_NULL); break;
@@ -172,14 +173,18 @@ static void literal(parser *p) {
     }
 }
 
-static void number(parser *p) {
+static void number(parser *p, object **o) {
     double num = strtod(p->prev.start, NULL);
     emit_constant(p, NUMBER_VAL(num));
 }
 
-static void unary(parser *p) {
+static void string(parser *p, object **o) {
+    emit_constant(p, OBJ_VAL(copy_string(o, p->prev.start + 1, p->prev.length -2)));
+}
+
+static void unary(parser *p, object **o) {
     token_type operator = p->prev.type;
-    parse_precedence(p, PREC_UNARY);
+    parse_precedence(p, o, PREC_UNARY);
     switch (operator) {
         case TOKEN_MINUS: emit_byte(p, OP_NEGATE); break;
         case TOKEN_BANG: emit_byte(p, OP_NOT); break;
@@ -187,13 +192,13 @@ static void unary(parser *p) {
     }
 }
 
-static void grouping(parser *p) {
-    expression(p);
+static void grouping(parser *p, object **o) {
+    expression(p, o);
     consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
-static void expression(parser *p) {
-    parse_precedence(p, PREC_ASSIGNMENT);
+static void expression(parser *p, object **o) {
+    parse_precedence(p, o, PREC_ASSIGNMENT);
 }
 
 parse_rule rules[] = {
@@ -218,7 +223,7 @@ parse_rule rules[] = {
     [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_STRING] = {NULL, NULL, PREC_NONE},
+    [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
@@ -241,7 +246,7 @@ parse_rule rules[] = {
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
 
-static void parse_precedence(parser *p, precedence prec) {
+static void parse_precedence(parser *p, object **o, precedence prec) {
     advance(p);
     parse_func prefix_rule = get_rule(p->prev.type)->prefix;
     if (prefix_rule == NULL) {
@@ -249,12 +254,12 @@ static void parse_precedence(parser *p, precedence prec) {
         return;
     }
 
-    prefix_rule(p);
+    prefix_rule(p, o);
 
     while(prec <= get_rule(p->current.type)->prec) {
         advance(p);
         parse_func infix_rule = get_rule(p->prev.type)->infix;
-        infix_rule(p);
+        infix_rule(p, o);
     }
 }
 
@@ -262,14 +267,14 @@ static parse_rule *get_rule(token_type type) {
     return &rules[type];
 }
 
-int compile(const char* source, segment *seg) {
+int compile(const char* source, segment *seg, object **objects) {
     scanner s;
     parser p;
     compiling_segment = seg;
     init_scanner(&s, source);
     init_parser(&p, &s);
     advance(&p);
-    expression(&p);
+    expression(&p, objects);
     consume(&p, TOKEN_EOF, "Expect end of expression.");
     end_compiler(&p);
     return !p.had_error;
