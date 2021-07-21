@@ -28,11 +28,14 @@ typedef enum {
     OP_POP,
     // One-byte operand
     OP_CONSTANT,
+    OP_POPN,
     // Three-byte operand 
     OP_CONSTANT_LONG,
     OP_DEFINE_GLOBAL,
     OP_GET_GLOBAL,
     OP_SET_GLOBAL,
+    OP_GET_LOCAL,
+    OP_SET_LOCAL,
 } opcode;
 
 typedef struct {

@@ -15,9 +15,21 @@ static size_t simple_instruction(const char *name, int offset) {
     return offset + 1;
 }
 
+static size_t raw_byte_instruction(const char *name, segment *s, int offset) {
+    uint8_t byte = s->bytecode[offset+1];
+    printf("%-16s %5u\n", name, byte);
+    return offset + 2;
+}
+
+static size_t three_byte_instruction(const char *name, segment *s, int offset) {
+    uint32_t arg = ((uint32_t) s->bytecode[offset+1] << 16) + ((uint32_t) s->bytecode[offset+2] << 8) + ((uint32_t) s->bytecode[offset+3]);
+    printf("%-16s %5u\n", name, arg);
+    return offset + 4;
+}
+
 static size_t constant_instruction(const char *name, segment *s, int offset) {
     uint8_t constant = s->bytecode[offset+1];
-    printf("%-16s %5d '", name, constant);
+    printf("%-16s %5u '", name, constant);
     print_value(s->constants.values[constant]);
     printf("'\n");
     return offset + 2;
@@ -25,7 +37,7 @@ static size_t constant_instruction(const char *name, segment *s, int offset) {
 
 static size_t constant_long_instruction(const char *name, segment *s, int offset) {
     uint32_t constant = (s->bytecode[offset+1] << 16) + (s->bytecode[offset+2] << 8) + (s->bytecode[offset+3]);
-    printf("%-16s %5d '", name, constant);
+    printf("%-16s %5u '", name, constant);
     print_value(s->constants.values[constant]);
     printf("'\n");
     return offset + 4;
@@ -79,12 +91,18 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_POP", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
+        case OP_POPN:
+            return raw_byte_instruction("OP_POPN", s, offset);
         case OP_DEFINE_GLOBAL:
             return constant_long_instruction("OP_DEFINE_GLOBAL", s, offset);
         case OP_GET_GLOBAL:
             return constant_long_instruction("OP_GET_GLOBAL", s, offset);
         case OP_SET_GLOBAL:
             return constant_long_instruction("OP_SET_GLOBAL", s, offset);
+        case OP_GET_LOCAL:
+            return three_byte_instruction("OP_GET_LOCAL", s, offset);
+        case OP_SET_LOCAL:
+            return three_byte_instruction("OP_SET_LOCAL", s, offset);
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
         default:

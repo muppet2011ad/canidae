@@ -6,6 +6,7 @@
 #include "scanner.h"
 #include "object.h"
 #include "value.h"
+#include "memory.h"
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
@@ -20,13 +21,14 @@ typedef struct {
 
 typedef struct {
     token name;
-    uint32_t depth;
+    long depth;
 } local;
 
 typedef struct {
-    local locals[UINT16_MAX+1];
-    uint16_t local_count;
-    uint32_t scope_depth;
+    local *locals;
+    long local_count;
+    uint32_t local_capacity;
+    long scope_depth;
 } compiler;
 
 typedef enum {
@@ -44,7 +46,7 @@ typedef enum {
     PREC_PRIMARY
 } precedence;
 
-typedef void (*parse_func)(parser *p, VM *vm, uint8_t can_assign);
+typedef void (*parse_func)(parser *p, compiler *c, VM *vm, uint8_t can_assign);
 
 typedef struct {
     parse_func prefix;
@@ -53,14 +55,28 @@ typedef struct {
 } parse_rule;
 
 static parse_rule *get_rule(token_type type);
-static void expression(parser *p, VM *vm);
-static void declaration(parser *p, VM *vm);
-static void statement(parser *p, VM *vm);
-static uint32_t parse_variable(parser *p, VM *vm, const char *error_message);
-static void parse_precedence(parser *p, VM *vm, precedence prec);
-static uint32_t identifier_constant(parser *p, VM *vm, token *name);
+static void expression(parser *p, compiler *c, VM *vm);
+static void declaration(parser *p, compiler *c, VM *vm);
+static void statement(parser *p, compiler *c, VM *vm);
+static uint32_t parse_variable(parser *p, compiler *c, VM *vm, const char *error_message);
+static void parse_precedence(parser *p, compiler *c, VM *vm, precedence prec);
+static uint32_t identifier_constant(parser *p, compiler *c, VM *vm, token *name);
+static long resolve_local(parser *p, compiler *c, token *name);
+static void mark_initialised(compiler *c);
 
 segment *compiling_segment;
+
+static void init_compiler(compiler *c) {
+    c->local_count = 0;
+    c->local_capacity = 0;
+    c->scope_depth = 0;
+    c->locals = NULL;
+}
+
+static void destroy_compiler(compiler *c) {
+    FREE_ARRAY(local, c->locals, c->local_capacity);
+    init_compiler(c);
+}
 
 static segment *current_seg() {
     return compiling_segment;
@@ -168,10 +184,32 @@ static void end_compiler(parser *p) {
     #endif
 }
 
-static void binary(parser *p, VM *vm, uint8_t can_assign) {
+static void begin_scope(compiler *c) {
+    c->scope_depth++;
+}
+
+static void end_scope(parser *p, compiler *c) {
+    c->scope_depth--;
+
+    long to_pop = 0;
+    while (c->local_count > 0 && c->locals[c->local_count-1].depth > c->scope_depth) {
+        to_pop++;
+        c->local_count--;
+    }
+    for (; to_pop > 0; to_pop-=255) {
+        if (to_pop >= 255) {
+            emit_2_bytes(p, OP_POPN, 255);
+        }
+        else {
+            emit_2_bytes(p, OP_POPN, to_pop);
+        }
+    }
+}
+
+static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     token_type operator = p->prev.type;
     parse_rule *rule = get_rule(operator);
-    parse_precedence(p, vm, rule->prec + 1);
+    parse_precedence(p, c, vm, rule->prec + 1);
     switch (operator) {
         case TOKEN_PLUS: emit_byte(p, OP_ADD); break;
         case TOKEN_MINUS: emit_byte(p, OP_SUBTRACT); break;
@@ -189,7 +227,7 @@ static void binary(parser *p, VM *vm, uint8_t can_assign) {
 
 }
 
-static void literal(parser *p, VM *vm, uint8_t can_assign) {
+static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     switch (p->prev.type) {
         case TOKEN_FALSE: emit_byte(p, OP_FALSE); break;
         case TOKEN_NULL: emit_byte(p, OP_NULL); break;
@@ -198,35 +236,46 @@ static void literal(parser *p, VM *vm, uint8_t can_assign) {
     }
 }
 
-static void number(parser *p, VM *vm, uint8_t can_assign) {
+static void number(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     double num = strtod(p->prev.start, NULL);
     emit_constant(p, NUMBER_VAL(num));
 }
 
-static void string(parser *p, VM *vm, uint8_t can_assign) {
+static void string(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     emit_constant(p, OBJ_VAL(copy_string(vm, p->prev.start + 1, p->prev.length -2)));
 }
 
-static void named_variable(parser *p, VM *vm, token name, uint8_t can_assign) {
-    uint32_t arg = identifier_constant(p, vm, &name);
+static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t can_assign) {
+    uint8_t get_op, set_op;
+    long arg_long = resolve_local(p, c, &name);
+    uint32_t arg = (uint32_t) arg_long;
+    if (arg_long != -1) {
+        get_op = OP_GET_LOCAL;
+        set_op = OP_SET_LOCAL;
+    }
+    else {
+        arg = identifier_constant(p, c, vm, &name);
+        get_op = OP_GET_GLOBAL;
+        set_op = OP_SET_LOCAL;
+    }
     if (can_assign && match(p, TOKEN_EQUAL)) {
-        expression(p, vm);
-        uint8_t bytes[4] = {OP_SET_GLOBAL, arg >> 16, arg >> 8, arg};
+        expression(p, c, vm);
+        uint8_t bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
         write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
 
     } else {
-        uint8_t bytes[4] = {OP_GET_GLOBAL, arg >> 16, arg >> 8, arg};
+        uint8_t bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
         write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
     }
 }
 
-static void variable(parser *p, VM *vm, uint8_t can_assign) {
-    named_variable(p, vm, p->prev, can_assign);
+static void variable(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    named_variable(p, c, vm, p->prev, can_assign);
 }
 
-static void unary(parser *p, VM *vm, uint8_t can_assign) {
+static void unary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     token_type operator = p->prev.type;
-    parse_precedence(p, vm, PREC_UNARY);
+    parse_precedence(p, c, vm, PREC_UNARY);
     switch (operator) {
         case TOKEN_MINUS: emit_byte(p, OP_NEGATE); break;
         case TOKEN_BANG: emit_byte(p, OP_NOT); break;
@@ -234,34 +283,45 @@ static void unary(parser *p, VM *vm, uint8_t can_assign) {
     }
 }
 
-static void grouping(parser *p, VM *vm, uint8_t can_assign) {
-    expression(p, vm);
+static void grouping(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    expression(p, c, vm);
     consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
-static void expression(parser *p, VM *vm) {
-    parse_precedence(p, vm, PREC_ASSIGNMENT);
+static void expression(parser *p, compiler *c, VM *vm) {
+    parse_precedence(p, c, vm, PREC_ASSIGNMENT);
 }
 
-static void define_variable(parser *p, uint32_t global) {
+static void block(parser *p, compiler *c, VM *vm) {
+    while (!check(p, TOKEN_RIGHT_BRACE) && !check(p, TOKEN_EOF)) {
+        declaration(p, c, vm);
+    }
+    consume(p, TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+}
+
+static void define_variable(parser *p, compiler *c, uint32_t global) {
+    if (c->scope_depth > 0) {
+        mark_initialised(c);
+        return;
+    }
     uint8_t bytes[4] = {OP_DEFINE_GLOBAL, global >> 16, global >> 8, global};
     write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
 }
 
-static void var_declaration(parser *p, VM *vm) {
-    uint32_t global = parse_variable(p, vm, "Expect variable name.");
+static void var_declaration(parser *p, compiler *c, VM *vm) {
+    uint32_t global = parse_variable(p, c, vm, "Expect variable name.");
 
     if (match(p, TOKEN_EQUAL)) {
-        expression(p, vm);
+        expression(p, c, vm);
     } else {
         emit_byte(p, OP_NULL);
     }
     consume(p, TOKEN_SEMICOLON, "Expect ';' after variable declaration,");
-    define_variable(p, global);
+    define_variable(p, c, global);
 }
 
-static void print_statement(parser *p, VM *vm) {
-    expression(p, vm);
+static void print_statement(parser *p, compiler *c, VM *vm) {
+    expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after value.");
     emit_byte(p, OP_PRINT);
 }
@@ -287,22 +347,27 @@ static void synchronise(parser *p) {
     }
 }
 
-static void declaration(parser *p, VM *vm) {
+static void declaration(parser *p, compiler *c, VM *vm) {
     if (match(p, TOKEN_LET)) {
-        var_declaration(p, vm);
+        var_declaration(p, c, vm);
     }
     else {
-        statement(p, vm);
+        statement(p, c, vm);
     }
 
     if (p->panic) synchronise(p);
 }
 
-static void statement(parser *p, VM *vm) {
+static void statement(parser *p, compiler *c, VM *vm) {
     if (match(p, TOKEN_PRINT)) {
-        print_statement(p, vm);
+        print_statement(p, c, vm);
+    } else if (match(p, TOKEN_LEFT_BRACE)) {
+        begin_scope(c);
+        block(p, c, vm);
+        end_scope(p, c);
+
     } else {
-        expression(p, vm);
+        expression(p, c, vm);
         consume(p, TOKEN_SEMICOLON, "Expect ';' after expression.");
         emit_byte(p, OP_POP);
     }
@@ -353,7 +418,7 @@ parse_rule rules[] = {
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
 
-static void parse_precedence(parser *p, VM *vm, precedence prec) {
+static void parse_precedence(parser *p, compiler *c, VM *vm, precedence prec) {
     advance(p);
     parse_func prefix_rule = get_rule(p->prev.type)->prefix;
     if (prefix_rule == NULL) {
@@ -362,12 +427,12 @@ static void parse_precedence(parser *p, VM *vm, precedence prec) {
     }
 
     uint8_t can_assign = prec <= PREC_ASSIGNMENT;
-    prefix_rule(p, vm, can_assign);
+    prefix_rule(p, c, vm, can_assign);
 
     while(prec <= get_rule(p->current.type)->prec) {
         advance(p);
         parse_func infix_rule = get_rule(p->prev.type)->infix;
-        infix_rule(p, vm, can_assign);
+        infix_rule(p, c, vm, can_assign);
     }
 
     if (can_assign && match(p, TOKEN_EQUAL)) {
@@ -375,7 +440,7 @@ static void parse_precedence(parser *p, VM *vm, precedence prec) {
     }
 }
 
-static uint32_t identifier_constant(parser *p, VM *vm, token *name) {
+static uint32_t identifier_constant(parser *p, compiler *c, VM *vm, token *name) {
     // Extra code so that new constants aren't required for every use of a variable
     segment *seg = current_seg();
     for (uint32_t i = 0; i < seg->constants.len; i++) {
@@ -390,9 +455,67 @@ static uint32_t identifier_constant(parser *p, VM *vm, token *name) {
     return make_constant(p, OBJ_VAL(copy_string(vm, name->start, name->length)));
 }
 
-static uint32_t parse_variable(parser *p, VM *vm, const char *error_message) {
+static uint8_t identifiers_equal(token *a, token *b) {
+    return a->length == b->length && memcmp(a->start, b->start, a->length) == 0;
+}
+
+static long resolve_local(parser *p, compiler *c, token *name) {
+    for (long i = c->local_count - 1; i >= 0; i--) {
+        local *l = &c->locals[i];
+        if (identifiers_equal(name, &l->name)) {
+            if (l->depth == -1) {
+                error(p, "Can't read local variable in its own initaliser.");
+            }
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+static void add_local(parser *p, compiler *c, token name) {
+    // Extra code for allowing more locals
+    if (c->local_count > UINT24_MAX) {
+        error(p, "Too many local variables in function.");
+        return;
+    }
+    if (c->local_count >= c->local_capacity) {
+        uint32_t oldc = c->local_capacity;
+        c->local_capacity = GROW_CAPACITY(oldc);
+        c->locals = GROW_ARRAY(local, c->locals, oldc, c->local_capacity);
+    }
+    local *l = &c->locals[c->local_count++];
+    l->name = name;
+    l->depth = -1;
+}
+
+static void declare_variable(parser *p, compiler *c) {
+    if (c->scope_depth == 0) return;
+    token *name = &p->prev;
+    for (long i = (long) c->local_count - 1; i >= 0; i--) {
+        local *l = &c->locals[i];
+        if (l->depth != -1 && l->depth < c->scope_depth) {
+            break;
+        }
+
+        if (identifiers_equal(name, &l->name)) {
+            error(p, "Already a variable with this name in this scope.");
+        }
+    }
+    add_local(p, c, *name);
+}
+
+static uint32_t parse_variable(parser *p, compiler *c, VM *vm, const char *error_message) {
     consume(p, TOKEN_IDENTIFIER, error_message);
-    return identifier_constant(p, vm, &p->prev);
+
+    declare_variable(p, c);
+    if (c->scope_depth > 0) return 0;
+
+    return identifier_constant(p, c, vm, &p->prev);
+}
+
+static void mark_initialised(compiler *c) {
+    c->locals[c->local_count - 1].depth = c->scope_depth;
 }
 
 static parse_rule *get_rule(token_type type) {
@@ -402,14 +525,17 @@ static parse_rule *get_rule(token_type type) {
 int compile(const char* source, segment *seg, VM *vm) {
     scanner s;
     parser p;
+    compiler c;
     compiling_segment = seg;
     init_scanner(&s, source);
     init_parser(&p, &s);
+    init_compiler(&c);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {
-        declaration(&p, vm);
+        declaration(&p, &c, vm);
     }
     consume(&p, TOKEN_EOF, "Expect end of expression.");
     end_compiler(&p);
+    destroy_compiler(&c);
     return !p.had_error;
 }

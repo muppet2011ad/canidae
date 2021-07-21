@@ -66,6 +66,12 @@ value pop(VM *vm) {
     return *vm->stack_ptr;
 }
 
+value popn(VM *vm, uint8_t n) {
+    vm->stack_ptr -= n;
+    vm->stack_len -= n;
+    return *vm->stack_ptr;
+}
+
 static value peek(VM *vm, int distance) {
     return vm->stack_ptr[-1 - distance];
 }
@@ -90,7 +96,8 @@ static void concatenate(VM *vm) {
 static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
-    #define READ_CONSTANT_LONG() (vm->s->constants.values[((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())])
+    #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
+    #define READ_CONSTANT_LONG() (vm->s->constants.values[READ_UINT24()])
     #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \
         do { \
@@ -175,6 +182,11 @@ static interpret_result run(VM *vm) {
                 push(vm, constant);
                 break;
             }
+            case OP_POPN: {
+                uint8_t n = READ_BYTE();
+                popn(vm, n);
+                break;
+            }
             case OP_DEFINE_GLOBAL: {
                 object_string *name = READ_STRING();
                 hashmap_set(&vm->globals, name, peek(vm, 0));
@@ -200,6 +212,16 @@ static interpret_result run(VM *vm) {
                 }
                 break;
             }
+            case OP_GET_LOCAL: {
+                uint32_t arg = READ_UINT24();
+                push(vm, vm->stack[arg]);
+                break;
+            }
+            case OP_SET_LOCAL: {
+                uint32_t arg = READ_UINT24();
+                vm->stack[arg] = peek(vm, 0);
+                break;
+            }
             case OP_CONSTANT_LONG: {
                 value constant = READ_CONSTANT_LONG();
                 push(vm, constant);
@@ -211,6 +233,7 @@ static interpret_result run(VM *vm) {
     #undef READ_BYTE
     #undef READ_CONSTANT
     #undef READ_CONSTANT_LONG
+    #undef READ_UINT24
     #undef READ_STRING
     #undef BINARY_OP
 }

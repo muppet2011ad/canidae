@@ -5,9 +5,9 @@
 #include "common.h"
 
 typedef enum {
+    NULL_TYPE,
     NUM_TYPE,
     BOOL_TYPE,
-    NULL_TYPE,
     OBJ_TYPE,
 } value_type;
 
