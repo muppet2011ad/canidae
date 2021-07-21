@@ -52,6 +52,8 @@ typedef struct {
 
 static parse_rule *get_rule(token_type type);
 static void expression(parser *p, VM *vm);
+static void declaration(parser *p, VM *vm);
+static void statement(parser *p, VM *vm);
 static void parse_precedence(parser *p, VM *vm, precedence prec);
 
 segment *compiling_segment;
@@ -108,6 +110,16 @@ static void consume(parser *p, token_type type, const char *message) {
         return;
     }
     error_at_current(p, message);
+}
+
+static uint8_t check(parser *p, token_type type) {
+    return p->current.type == type;
+}
+
+static uint8_t match(parser *p, token_type type) {
+    if (!check(p, type)) return 0;
+    advance(p);
+    return 1;
 }
 
 static void emit_byte(parser *p, uint8_t byte) {
@@ -201,6 +213,49 @@ static void expression(parser *p, VM *vm) {
     parse_precedence(p, vm, PREC_ASSIGNMENT);
 }
 
+static void print_statement(parser *p, VM *vm) {
+    expression(p, vm);
+    consume(p, TOKEN_SEMICOLON, "Expect ';' after value.");
+    emit_byte(p, OP_PRINT);
+}
+
+static void synchronise(parser *p) {
+    p->panic = 0;
+
+    while (p->current.type != TOKEN_EOF) {
+        if (p->prev.type == TOKEN_SEMICOLON) return;
+        switch (p->current.type) {
+            case TOKEN_CLASS:
+            case TOKEN_FUNCTION:
+            case TOKEN_LET:
+            case TOKEN_FOR:
+            case TOKEN_IF:
+            case TOKEN_WHILE:
+            case TOKEN_PRINT:
+            case TOKEN_RETURN:
+                return;
+            default:;
+        }
+        advance(p);
+    }
+}
+
+static void declaration(parser *p, VM *vm) {
+    statement(p, vm);
+
+    if (p->panic) synchronise(p);
+}
+
+static void statement(parser *p, VM *vm) {
+    if (match(p, TOKEN_PRINT)) {
+        print_statement(p, vm);
+    } else {
+        expression(p, vm);
+        consume(p, TOKEN_SEMICOLON, "Expect ';' after expression.");
+        emit_byte(p, OP_POP);
+    }
+}
+
 parse_rule rules[] = {
     [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
@@ -274,7 +329,9 @@ int compile(const char* source, segment *seg, VM *vm) {
     init_scanner(&s, source);
     init_parser(&p, &s);
     advance(&p);
-    expression(&p, vm);
+    while (!match(&p, TOKEN_EOF)) {
+        declaration(&p, vm);
+    }
     consume(&p, TOKEN_EOF, "Expect end of expression.");
     end_compiler(&p);
     return !p.had_error;

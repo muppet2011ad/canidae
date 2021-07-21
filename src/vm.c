@@ -115,8 +115,8 @@ static interpret_result run(VM *vm) {
         #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN:
-                print_value(pop(vm));
-                printf("\n");
+                //print_value(pop(vm));
+                //printf("\n");
                 return INTERPRET_OK;
             case OP_NEGATE:
                 if (!IS_NUMBER(peek(vm, 0))) {
@@ -161,6 +161,12 @@ static interpret_result run(VM *vm) {
             case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >=); break;
             case OP_LESS: BINARY_OP(BOOL_VAL, <); break;
             case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <=); break;
+            case OP_PRINT: {
+                print_value(pop(vm));
+                printf("\n");
+                break;
+            }
+            case OP_POP: pop(vm); break;
             case OP_CONSTANT: {
                 value constant = READ_CONSTANT();
                 push(vm, constant);

@@ -73,6 +73,10 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_LESS", offset);
         case OP_LESS_EQUAL:
             return simple_instruction("OP_LESS_EQUAL", offset);
+        case OP_PRINT:
+            return simple_instruction("OP_PRINT", offset);
+        case OP_POP:
+            return simple_instruction("OP_POP", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_CONSTANT_LONG:
