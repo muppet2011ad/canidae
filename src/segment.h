@@ -5,15 +5,28 @@
 #include "value.h"
 
 typedef enum {
-    OP_CONSTANT,
-    OP_CONSTANT_LONG,
+    // No operand
+    OP_RETURN,
     OP_NEGATE,
     OP_ADD,
     OP_SUBTRACT,
     OP_MULTIPLY,
     OP_DIVIDE,
     OP_POWER,
-    OP_RETURN,
+    OP_NULL,
+    OP_TRUE,
+    OP_FALSE,
+    OP_NOT,
+    OP_EQUAL,
+    OP_GREATER,
+    OP_GREATER_EQUAL,
+    OP_LESS,
+    OP_LESS_EQUAL,
+    // One-byte operand
+    OP_CONSTANT,
+    // Three-byte operand 
+    OP_CONSTANT_LONG,
+
 } opcode;
 
 typedef struct {

@@ -15,6 +15,17 @@ typedef struct {
     scanner *s;
 } parser;
 
+typedef struct {
+    token name;
+    uint32_t depth;
+} local;
+
+typedef struct {
+    local locals[UINT16_MAX+1];
+    uint16_t local_count;
+    uint32_t scope_depth;
+} compiler;
+
 typedef enum {
     PREC_NONE,
     PREC_ASSIGNMENT,
@@ -57,7 +68,7 @@ static void init_parser(parser *p, scanner *s) {
 static void error_at(parser *p, token *t, const char *message) {
     if (p->panic) return;
     p->panic = 1;
-    fprintf(stderr, "[line %d] Error", t->line);
+    fprintf(stderr, "[line %u] Error", t->line);
     if (t->type == TOKEN_EOF) {
         fprintf(stderr, " at end");
     }
@@ -102,6 +113,11 @@ static void emit_byte(parser *p, uint8_t byte) {
     write_to_segment(current_seg(), byte, p->prev.line);
 }
 
+static void emit_2_bytes(parser *p, uint8_t x, uint8_t y) {
+    emit_byte(p, x);
+    emit_byte(p, y);
+}
+
 static void emit_bytes(parser *p, uint8_t *bytes, size_t n) {
     write_n_bytes_to_segment(current_seg(), bytes, n, p->prev.line);
 }
@@ -110,7 +126,7 @@ static void emit_return(parser *p) {
     emit_byte(p, OP_RETURN);
 }
 
-static void emitConstant(parser *p, value v) {
+static void emit_constant(parser *p, value v) {
     uint32_t result = write_constant_to_segment(current_seg(), v, p->prev.line);
     if (result == UINT32_MAX) {
         error(p, "Too many constants in one chunk.");
@@ -136,14 +152,29 @@ static void binary(parser *p) {
         case TOKEN_STAR: emit_byte(p, OP_MULTIPLY); break;
         case TOKEN_SLASH: emit_byte(p, OP_DIVIDE); break;
         case TOKEN_CARET: emit_byte(p, OP_POWER); break;
+        case TOKEN_BANG_EQUAL: emit_2_bytes(p, OP_EQUAL, OP_NOT); break;
+        case TOKEN_EQUAL_EQUAL: emit_byte(p, OP_EQUAL); break;
+        case TOKEN_GREATER: emit_byte(p, OP_GREATER); break;
+        case TOKEN_GREATER_EQUAL: emit_byte(p, OP_GREATER_EQUAL); break;
+        case TOKEN_LESS: emit_byte(p, OP_LESS); break;
+        case TOKEN_LESS_EQUAL: emit_byte(p, OP_LESS_EQUAL); break;
         default: return;
     }
 
 }
 
+static void literal(parser *p) {
+    switch (p->prev.type) {
+        case TOKEN_FALSE: emit_byte(p, OP_FALSE); break;
+        case TOKEN_NULL: emit_byte(p, OP_NULL); break;
+        case TOKEN_TRUE: emit_byte(p, OP_TRUE); break;
+        default: return;
+    }
+}
+
 static void number(parser *p) {
     double num = strtod(p->prev.start, NULL);
-    emitConstant(p, NUMBER_VAL(num));
+    emit_constant(p, NUMBER_VAL(num));
 }
 
 static void unary(parser *p) {
@@ -151,6 +182,7 @@ static void unary(parser *p) {
     parse_precedence(p, PREC_UNARY);
     switch (operator) {
         case TOKEN_MINUS: emit_byte(p, OP_NEGATE); break;
+        case TOKEN_BANG: emit_byte(p, OP_NOT); break;
         default: return;
     }
 }
@@ -177,31 +209,31 @@ parse_rule rules[] = {
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
     [TOKEN_CARET] = {NULL, binary, PREC_POWER},
-    [TOKEN_BANG] = {NULL, NULL, PREC_NONE},
-    [TOKEN_BANG_EQUAL] = {NULL, NULL, PREC_NONE},
+    [TOKEN_BANG] = {unary, NULL, PREC_NONE},
+    [TOKEN_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
     [TOKEN_EQUAL] = {NULL, NULL, PREC_NONE},
-    [TOKEN_EQUAL_EQUAL] = {NULL, NULL, PREC_NONE},
-    [TOKEN_GREATER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_GREATER_EQUAL] = {NULL, NULL, PREC_NONE},
-    [TOKEN_LESS] = {NULL, NULL, PREC_NONE},
-    [TOKEN_LESS_EQUAL] = {NULL, NULL, PREC_NONE},
+    [TOKEN_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
+    [TOKEN_GREATER] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
+    [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
     [TOKEN_STRING] = {NULL, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
-    [TOKEN_FALSE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
     [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
     [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
-    [TOKEN_NULL] = {NULL, NULL, PREC_NONE},
+    [TOKEN_NULL] = {literal, NULL, PREC_NONE},
     [TOKEN_OR] = {NULL, NULL, PREC_NONE},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
     [TOKEN_THIS] = {NULL, NULL, PREC_NONE},
-    [TOKEN_TRUE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
     [TOKEN_LET] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},

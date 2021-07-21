@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <math.h>
 #include "common.h"
 #include "vm.h"
@@ -7,8 +8,21 @@
 #include "compiler.h"
 #include "memory.h"
 
-static void resetStack(VM *vm) {
+static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
+}
+
+static void runtime_error(VM *vm, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fputs("\n", stderr);
+
+    size_t instruction = vm->ip - vm->s->bytecode - 1;
+    uint32_t line = vm->s->lines[instruction];
+    fprintf(stderr, "[line %u] in script\n", line);
+    reset_stack(vm);
 }
 
 void init_VM(VM *vm) {
@@ -18,7 +32,7 @@ void init_VM(VM *vm) {
     }
     vm->stack_len = 0;
     vm->stack_capacity = STACK_INITIAL;
-    resetStack(vm);
+    reset_stack(vm);
 }
 
 void destroy_VM(VM *vm) {
@@ -44,15 +58,27 @@ value pop(VM *vm) {
     return *vm->stack_ptr;
 }
 
+static value peek(VM *vm, int distance) {
+    return vm->stack_ptr[-1 - distance];
+}
+
+static uint8_t is_falsey(value v) {
+    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0); // TODO: Make zero-length strings/arrays falsey when implemted
+}
+
 static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
     #define READ_CONSTANT_LONG() (vm->s->constants.values[((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())])
-    #define BINARY_OP(op) \
+    #define BINARY_OP(type, op) \
         do { \
+            if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
+                runtime_error(vm, "Operands must be numbers."); \
+                return INTERPRET_RUNTIME_ERROR; \
+            } \
             double b = AS_NUMBER(pop(vm)); \
             double a = AS_NUMBER(pop(vm)); \
-            push(vm, NUMBER_VAL(a op b)); \
+            push(vm, type(a op b)); \
         } while (0)
 
 
@@ -74,17 +100,35 @@ static interpret_result run(VM *vm) {
                 printf("\n");
                 return INTERPRET_OK;
             case OP_NEGATE:
-                (vm->stack_ptr-1)->as.number = -(vm->stack_ptr-1)->as.number; // TODO: error handling
+                if (!IS_NUMBER(peek(vm, 0))) {
+                    runtime_error(vm, "Operand must be a number.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                (vm->stack_ptr-1)->as.number = -(vm->stack_ptr-1)->as.number;
                 break;
-            case OP_ADD: BINARY_OP(+); break;
-            case OP_SUBTRACT: BINARY_OP(-); break;
-            case OP_MULTIPLY: BINARY_OP(*); break;
-            case OP_DIVIDE: BINARY_OP(/); break;
-            case OP_POWER:
+            case OP_ADD: BINARY_OP(NUMBER_VAL, +); break;
+            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
+            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
+            case OP_DIVIDE: BINARY_OP(NUMBER_VAL, /); break;
+            case OP_POWER:;
                 double b = AS_NUMBER(pop(vm));
                 double a = AS_NUMBER(pop(vm));
                 push(vm, NUMBER_VAL(pow(a, b)));
                 break;
+            case OP_NULL: push(vm, NULL_VAL); break;
+            case OP_TRUE: push(vm, BOOL_VAL(1)); break;
+            case OP_FALSE: push(vm, BOOL_VAL(0)); break;
+            case OP_NOT: push(vm, BOOL_VAL(is_falsey(pop(vm)))); break; // TODO: Do same optimisation as on OP_NEGATE
+            case OP_EQUAL: {
+                value b = pop(vm);
+                value a = pop(vm);
+                push(vm, BOOL_VAL(value_equality(a, b)));
+                break;
+            }
+            case OP_GREATER: BINARY_OP(BOOL_VAL, >); break;
+            case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >=); break;
+            case OP_LESS: BINARY_OP(BOOL_VAL, <); break;
+            case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <=); break;
             case OP_CONSTANT: {
                 value constant = READ_CONSTANT();
                 push(vm, constant);

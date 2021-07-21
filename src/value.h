@@ -43,5 +43,6 @@ void init_value_array(value_array *arr);
 void write_to_value_array(value_array *arr, value val);
 void destroy_value_array(value_array *arr);
 void print_value(value val);
+uint8_t value_equality(value a, value b);
 
 #endif

@@ -55,6 +55,24 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_DIVIDE", offset);
         case OP_POWER:
             return simple_instruction("OP_POWER", offset);
+        case OP_NULL:
+            return simple_instruction("OP_NULL", offset);
+        case OP_TRUE:
+            return simple_instruction("OP_TRUE", offset);
+        case OP_FALSE:
+            return simple_instruction("OP_FALSE", offset);
+        case OP_NOT:
+            return simple_instruction("OP_NOT", offset);
+        case OP_EQUAL:
+            return simple_instruction("OP_EQUAL", offset);
+        case OP_GREATER:
+            return simple_instruction("OP_GREATER", offset);
+        case OP_GREATER_EQUAL:
+            return simple_instruction("OP_GREATER_EQUAL", offset);
+        case OP_LESS:
+            return simple_instruction("OP_LESS", offset);
+        case OP_LESS_EQUAL:
+            return simple_instruction("OP_LESS_EQUAL", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_CONSTANT_LONG:

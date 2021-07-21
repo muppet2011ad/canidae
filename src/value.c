@@ -31,10 +31,22 @@ void print_value(value val) {
             printf("%g", AS_NUMBER(val));
             break;
         case BOOL_TYPE:;
-            uint8_t b = AS_NUMBER(val);
+            uint8_t b = AS_BOOL(val);
             printf("%s", bool_strings[b]);
             break;
+        case NULL_TYPE:
+            printf("null"); break;
         case OBJ_TYPE:
             break;
+    }
+}
+
+uint8_t value_equality(value a, value b) {
+    if (a.type != b.type) return 0;
+    switch (a.type) {
+        case BOOL_TYPE: return AS_BOOL(a) == AS_BOOL(b);
+        case NULL_TYPE: return 1;
+        case NUM_TYPE: return AS_NUMBER(a) == AS_NUMBER(b);
+        default: return 0;
     }
 }
