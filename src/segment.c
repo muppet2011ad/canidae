@@ -4,8 +4,6 @@
 #include "common.h"
 #include "memory.h"
 
-#define UINT24_MAX 16777215
-
 void init_segment(segment *s) {
     s->len = 0;
     s->capacity = 0;

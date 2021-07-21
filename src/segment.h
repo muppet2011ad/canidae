@@ -4,6 +4,8 @@
 #include "common.h"
 #include "value.h"
 
+#define UINT24_MAX 16777215
+
 typedef enum {
     // No operand
     OP_RETURN,

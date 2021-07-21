@@ -179,7 +179,6 @@ static interpret_result run(VM *vm) {
                 object_string *name = READ_STRING();
                 hashmap_set(&vm->globals, name, peek(vm, 0));
                 pop(vm);
-                pop(vm);
                 break;
             }
             case OP_GET_GLOBAL: {
@@ -189,7 +188,6 @@ static interpret_result run(VM *vm) {
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                pop(vm);
                 push(vm, val);
                 break;
             }

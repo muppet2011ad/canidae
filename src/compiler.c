@@ -98,6 +98,15 @@ static void error_at_current(parser *p, const char *message) {
     error_at(p, &p->current, message);
 }
 
+static uint32_t make_constant(parser *p, value val) {
+    size_t constant = add_constant(current_seg(), val);
+    if (constant > UINT24_MAX) {
+        error(p, "Too many constants in one segment.");
+        return 0;
+    }
+    return (uint32_t) constant;
+}
+
 static void advance(parser *p) {
     p->prev = p->current;
 
@@ -374,19 +383,11 @@ static uint32_t identifier_constant(parser *p, VM *vm, token *name) {
             char *const_string = AS_CSTRING(seg->constants.values[i]);
             uint32_t len = AS_STRING(seg->constants.values[i])->length;
             if (name->length == len && memcmp(const_string, name->start, len) == 0) {
-                if (i < UINT8_MAX) {
-                    emit_2_bytes(p, OP_CONSTANT, i);
-                    return i;
-                }
-                else {
-                    uint8_t bytes[4] = {OP_CONSTANT_LONG, i >> 16, i >> 8, i};
-                    emit_bytes(p, bytes, 4);
-                    return i;
-                }
+               return i;
             }
         }
     }
-    return write_constant_to_segment(current_seg(), OBJ_VAL(copy_string(vm, name->start, name->length)), name->line);
+    return make_constant(p, OBJ_VAL(copy_string(vm, name->start, name->length)));
 }
 
 static uint32_t parse_variable(parser *p, VM *vm, const char *error_message) {
