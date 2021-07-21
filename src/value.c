@@ -47,17 +47,7 @@ uint8_t value_equality(value a, value b) {
         case BOOL_TYPE: return AS_BOOL(a) == AS_BOOL(b);
         case NULL_TYPE: return 1;
         case NUM_TYPE: return AS_NUMBER(a) == AS_NUMBER(b);
-        case OBJ_TYPE: {
-            if (GET_OBJ_TYPE(a) != GET_OBJ_TYPE(b)) return 0;
-            switch (GET_OBJ_TYPE(a)) {
-                case OBJ_STRING:{
-                    object_string *stra = AS_STRING(a);
-                    object_string *strb = AS_STRING(b);
-                    return stra->length == strb->length && memcmp(stra->chars, strb->chars, stra->length) == 0;
-                }
-                default: return 0;
-            }
-        }
+        case OBJ_TYPE: return AS_OBJ(a) == AS_OBJ(b);
         default: return 0;
     }
 }

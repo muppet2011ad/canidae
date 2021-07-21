@@ -35,11 +35,13 @@ void init_VM(VM *vm) {
     vm->stack_len = 0;
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
+    init_hashmap(&vm->strings);
     reset_stack(vm);
 }
 
 void destroy_VM(VM *vm) {
     free_objects(vm->objects);
+    destroy_hashmap(&vm->strings);
     free(vm->stack);
 }
 
@@ -67,7 +69,7 @@ static value peek(VM *vm, int distance) {
 }
 
 static uint8_t is_falsey(value v) {
-    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0); // TODO: Make zero-length strings/arrays falsey when implemted
+    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0); // TODO: Make zero-length strings/arrays falsey when implemted
 }
 
 static void concatenate(VM *vm) {
@@ -79,7 +81,7 @@ static void concatenate(VM *vm) {
     memcpy(chars + a->length, b->chars, b->length);
     chars[len] = '\0';
 
-    object_string *result = take_string(&vm->objects, chars, len);
+    object_string *result = take_string(vm, chars, len);
     push(vm, OBJ_VAL(result));
 }
 
@@ -182,7 +184,7 @@ interpret_result interpret(VM *vm, const char *source) {
     segment seg;
     init_segment(&seg);
 
-    if (!compile(source, &seg, &vm->objects)) {
+    if (!compile(source, &seg, vm)) {
         destroy_segment(&seg);
         return INTERPRET_COMPILE_ERROR;
     }

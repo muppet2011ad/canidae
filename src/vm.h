@@ -3,6 +3,7 @@
 #define canidae_vm_h
 
 #include "segment.h"
+#include "hashmap.h"
 
 #define STACK_INITIAL 256
 
@@ -13,6 +14,7 @@ typedef struct {
     size_t stack_len;
     size_t stack_capacity;
     value *stack_ptr;
+    hashmap strings;
     object *objects;
 } VM;
 

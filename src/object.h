@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "value.h"
+#include "vm.h"
 
 #define GET_OBJ_TYPE(v) (AS_OBJ(v)->type)
 #define IS_STRING(v) is_obj_type(v, OBJ_STRING)
@@ -27,8 +28,8 @@ struct object_string {
     uint32_t hash;
 };
 
-object_string *take_string(object **objects, char *chars, uint32_t length);
-object_string *copy_string(object **objects, const char *chars, uint32_t length);
+object_string *take_string(VM *vm, char *chars, uint32_t length);
+object_string *copy_string(VM *vm, const char *chars, uint32_t length);
 void print_object(value v);
 
 static inline uint8_t is_obj_type(value v, object_type type) {

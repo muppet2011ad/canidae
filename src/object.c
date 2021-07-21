@@ -5,22 +5,23 @@
 #include "value.h"
 #include "vm.h"
 
-#define ALLOCATE_OBJ(objects_list ,type, obj_type) \
-    (type*) allocate_object(objects_list, sizeof(type), obj_type);
+#define ALLOCATE_OBJ(vm ,type, obj_type) \
+    (type*) allocate_object(vm, sizeof(type), obj_type);
 
-static object *allocate_object(object **objects, size_t size, object_type type) {
+static object *allocate_object(VM* vm, size_t size, object_type type) {
     object *obj = reallocate(NULL, 0, size);
     obj->type = type;
-    obj->next = *objects;
-    *objects = obj;
+    obj->next = vm->objects;
+    vm->objects = obj;
     return obj;
 }
 
-static object_string *allocate_string(object **objects, char *chars, uint32_t length, uint32_t hash) {
-    object_string *string = ALLOCATE_OBJ(objects, object_string, OBJ_STRING);
+static object_string *allocate_string(VM *vm, char *chars, uint32_t length, uint32_t hash) {
+    object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
     string->chars = chars;
     string->hash = hash;
+    hashmap_set(&vm->strings, string, NULL_VAL);
     return string;
 }
 
@@ -33,17 +34,24 @@ static uint32_t hash_string(const char *key, uint32_t length) {
     return hash;
 }
 
-object_string *take_string(object **objects, char *chars, uint32_t length) {
+object_string *take_string(VM *vm, char *chars, uint32_t length) {
     uint32_t hash = hash_string(chars, length);
-    return allocate_string(objects, chars, length, hash);
+    object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
+    if (interned != NULL) {
+        FREE_ARRAY(char, chars, length + 1);
+        return interned;
+    }
+    return allocate_string(vm, chars, length, hash);
 }
 
-object_string *copy_string(object **objects, const char *chars, uint32_t length) {
+object_string *copy_string(VM *vm, const char *chars, uint32_t length) {
+    uint32_t hash = hash_string(chars, length);
+    object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
+    if (interned != NULL) return interned;
     char *new_string = ALLOCATE(char, length + 1);
     memcpy(new_string, chars, length);
-    uint32_t hash = hash_string(chars, length);
     new_string[length] = '\0';
-    return allocate_string(objects, new_string, length, hash);
+    return allocate_string(vm, new_string, length, hash);
 }
 
 void print_object(value v) {
