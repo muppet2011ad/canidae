@@ -36,12 +36,14 @@ void init_VM(VM *vm) {
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
     init_hashmap(&vm->strings);
+    init_hashmap(&vm->globals);
     reset_stack(vm);
 }
 
 void destroy_VM(VM *vm) {
-    free_objects(vm->objects);
     destroy_hashmap(&vm->strings);
+    destroy_hashmap(&vm->globals);
+    free_objects(vm->objects);
     free(vm->stack);
 }
 
@@ -89,6 +91,7 @@ static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
     #define READ_CONSTANT_LONG() (vm->s->constants.values[((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())])
+    #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \
         do { \
             if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
@@ -172,6 +175,33 @@ static interpret_result run(VM *vm) {
                 push(vm, constant);
                 break;
             }
+            case OP_DEFINE_GLOBAL: {
+                object_string *name = READ_STRING();
+                hashmap_set(&vm->globals, name, peek(vm, 0));
+                pop(vm);
+                pop(vm);
+                break;
+            }
+            case OP_GET_GLOBAL: {
+                object_string *name = READ_STRING();
+                value val;
+                if (!hashmap_get(&vm->globals, name, &val)) {
+                    runtime_error(vm, "Undefined variable '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                pop(vm);
+                push(vm, val);
+                break;
+            }
+            case OP_SET_GLOBAL: {
+                object_string *name = READ_STRING();
+                if(hashmap_set(&vm->globals, name, peek(vm, 0))) {
+                    hashmap_delete(&vm->globals, name);
+                    runtime_error(vm, "Undefined variable '%s'.", name->chars);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             case OP_CONSTANT_LONG: {
                 value constant = READ_CONSTANT_LONG();
                 push(vm, constant);
@@ -183,6 +213,7 @@ static interpret_result run(VM *vm) {
     #undef READ_BYTE
     #undef READ_CONSTANT
     #undef READ_CONSTANT_LONG
+    #undef READ_STRING
     #undef BINARY_OP
 }
 

@@ -28,7 +28,9 @@ typedef enum {
     OP_CONSTANT,
     // Three-byte operand 
     OP_CONSTANT_LONG,
-
+    OP_DEFINE_GLOBAL,
+    OP_GET_GLOBAL,
+    OP_SET_GLOBAL,
 } opcode;
 
 typedef struct {

@@ -79,6 +79,12 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_POP", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
+        case OP_DEFINE_GLOBAL:
+            return constant_long_instruction("OP_DEFINE_GLOBAL", s, offset);
+        case OP_GET_GLOBAL:
+            return constant_long_instruction("OP_GET_GLOBAL", s, offset);
+        case OP_SET_GLOBAL:
+            return constant_long_instruction("OP_SET_GLOBAL", s, offset);
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
         default:

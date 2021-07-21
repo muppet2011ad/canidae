@@ -1,9 +1,11 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "common.h"
 #include "compiler.h"
 #include "scanner.h"
 #include "object.h"
+#include "value.h"
 #ifdef DEBUG_PRINT_CODE
 #include "debug.h"
 #endif
@@ -42,7 +44,7 @@ typedef enum {
     PREC_PRIMARY
 } precedence;
 
-typedef void (*parse_func)(parser *p, VM *vm);
+typedef void (*parse_func)(parser *p, VM *vm, uint8_t can_assign);
 
 typedef struct {
     parse_func prefix;
@@ -54,7 +56,9 @@ static parse_rule *get_rule(token_type type);
 static void expression(parser *p, VM *vm);
 static void declaration(parser *p, VM *vm);
 static void statement(parser *p, VM *vm);
+static uint32_t parse_variable(parser *p, VM *vm, const char *error_message);
 static void parse_precedence(parser *p, VM *vm, precedence prec);
+static uint32_t identifier_constant(parser *p, VM *vm, token *name);
 
 segment *compiling_segment;
 
@@ -155,7 +159,7 @@ static void end_compiler(parser *p) {
     #endif
 }
 
-static void binary(parser *p, VM *vm) {
+static void binary(parser *p, VM *vm, uint8_t can_assign) {
     token_type operator = p->prev.type;
     parse_rule *rule = get_rule(operator);
     parse_precedence(p, vm, rule->prec + 1);
@@ -176,7 +180,7 @@ static void binary(parser *p, VM *vm) {
 
 }
 
-static void literal(parser *p, VM *vm) {
+static void literal(parser *p, VM *vm, uint8_t can_assign) {
     switch (p->prev.type) {
         case TOKEN_FALSE: emit_byte(p, OP_FALSE); break;
         case TOKEN_NULL: emit_byte(p, OP_NULL); break;
@@ -185,16 +189,33 @@ static void literal(parser *p, VM *vm) {
     }
 }
 
-static void number(parser *p, VM *vm) {
+static void number(parser *p, VM *vm, uint8_t can_assign) {
     double num = strtod(p->prev.start, NULL);
     emit_constant(p, NUMBER_VAL(num));
 }
 
-static void string(parser *p, VM *vm) {
+static void string(parser *p, VM *vm, uint8_t can_assign) {
     emit_constant(p, OBJ_VAL(copy_string(vm, p->prev.start + 1, p->prev.length -2)));
 }
 
-static void unary(parser *p, VM *vm) {
+static void named_variable(parser *p, VM *vm, token name, uint8_t can_assign) {
+    uint32_t arg = identifier_constant(p, vm, &name);
+    if (can_assign && match(p, TOKEN_EQUAL)) {
+        expression(p, vm);
+        uint8_t bytes[4] = {OP_SET_GLOBAL, arg >> 16, arg >> 8, arg};
+        write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+
+    } else {
+        uint8_t bytes[4] = {OP_GET_GLOBAL, arg >> 16, arg >> 8, arg};
+        write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+    }
+}
+
+static void variable(parser *p, VM *vm, uint8_t can_assign) {
+    named_variable(p, vm, p->prev, can_assign);
+}
+
+static void unary(parser *p, VM *vm, uint8_t can_assign) {
     token_type operator = p->prev.type;
     parse_precedence(p, vm, PREC_UNARY);
     switch (operator) {
@@ -204,13 +225,30 @@ static void unary(parser *p, VM *vm) {
     }
 }
 
-static void grouping(parser *p, VM *vm) {
+static void grouping(parser *p, VM *vm, uint8_t can_assign) {
     expression(p, vm);
     consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
 static void expression(parser *p, VM *vm) {
     parse_precedence(p, vm, PREC_ASSIGNMENT);
+}
+
+static void define_variable(parser *p, uint32_t global) {
+    uint8_t bytes[4] = {OP_DEFINE_GLOBAL, global >> 16, global >> 8, global};
+    write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+}
+
+static void var_declaration(parser *p, VM *vm) {
+    uint32_t global = parse_variable(p, vm, "Expect variable name.");
+
+    if (match(p, TOKEN_EQUAL)) {
+        expression(p, vm);
+    } else {
+        emit_byte(p, OP_NULL);
+    }
+    consume(p, TOKEN_SEMICOLON, "Expect ';' after variable declaration,");
+    define_variable(p, global);
 }
 
 static void print_statement(parser *p, VM *vm) {
@@ -241,7 +279,12 @@ static void synchronise(parser *p) {
 }
 
 static void declaration(parser *p, VM *vm) {
-    statement(p, vm);
+    if (match(p, TOKEN_LET)) {
+        var_declaration(p, vm);
+    }
+    else {
+        statement(p, vm);
+    }
 
     if (p->panic) synchronise(p);
 }
@@ -277,7 +320,7 @@ parse_rule rules[] = {
     [TOKEN_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS] = {NULL, binary, PREC_COMPARISON},
     [TOKEN_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TOKEN_IDENTIFIER] = {NULL, NULL, PREC_NONE},
+    [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, NULL, PREC_NONE},
@@ -309,13 +352,46 @@ static void parse_precedence(parser *p, VM *vm, precedence prec) {
         return;
     }
 
-    prefix_rule(p, vm);
+    uint8_t can_assign = prec <= PREC_ASSIGNMENT;
+    prefix_rule(p, vm, can_assign);
 
     while(prec <= get_rule(p->current.type)->prec) {
         advance(p);
         parse_func infix_rule = get_rule(p->prev.type)->infix;
-        infix_rule(p, vm);
+        infix_rule(p, vm, can_assign);
     }
+
+    if (can_assign && match(p, TOKEN_EQUAL)) {
+        error(p, "Invalid assignment target.");
+    }
+}
+
+static uint32_t identifier_constant(parser *p, VM *vm, token *name) {
+    // Extra code so that new constants aren't required for every use of a variable
+    segment *seg = current_seg();
+    for (uint32_t i = 0; i < seg->constants.len; i++) {
+        if (IS_STRING(seg->constants.values[i])) {
+            char *const_string = AS_CSTRING(seg->constants.values[i]);
+            uint32_t len = AS_STRING(seg->constants.values[i])->length;
+            if (name->length == len && memcmp(const_string, name->start, len) == 0) {
+                if (i < UINT8_MAX) {
+                    emit_2_bytes(p, OP_CONSTANT, i);
+                    return i;
+                }
+                else {
+                    uint8_t bytes[4] = {OP_CONSTANT_LONG, i >> 16, i >> 8, i};
+                    emit_bytes(p, bytes, 4);
+                    return i;
+                }
+            }
+        }
+    }
+    return write_constant_to_segment(current_seg(), OBJ_VAL(copy_string(vm, name->start, name->length)), name->line);
+}
+
+static uint32_t parse_variable(parser *p, VM *vm, const char *error_message) {
+    consume(p, TOKEN_IDENTIFIER, error_message);
+    return identifier_constant(p, vm, &p->prev);
 }
 
 static parse_rule *get_rule(token_type type) {

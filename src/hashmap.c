@@ -88,6 +88,7 @@ uint8_t hashmap_delete(hashmap *h, object_string *key) {
 
     entry->k = NULL;
     entry->v = BOOL_VAL(1);
+    return 1;
 }
 
 void hashmap_copy_all(hashmap *from, hashmap *to) {

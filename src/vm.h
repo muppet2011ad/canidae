@@ -15,6 +15,7 @@ typedef struct {
     size_t stack_capacity;
     value *stack_ptr;
     hashmap strings;
+    hashmap globals;
     object *objects;
 } VM;
 
