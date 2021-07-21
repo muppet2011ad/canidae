@@ -4,7 +4,7 @@ MAIN_DEPS := bin/memory.o bin/segment.o bin/main.o bin/debug.o bin/value.o bin/v
 
 all: canidae
 
-bin/%.o: src/%.c src/common.h
+bin/%.o: src/%.c src/common.h src/segment.h
 	gcc $(OPTS) -c $< -g -fpic -o $@
 
 canidae: $(MAIN_DEPS)
