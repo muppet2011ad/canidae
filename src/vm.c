@@ -97,6 +97,7 @@ static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
+    #define READ_UINT56() ((size_t) READ_BYTE() << 48) + ((size_t) READ_BYTE() << 40) + ((size_t) READ_BYTE() << 32) + ((size_t) READ_BYTE() << 24) + ((size_t) READ_BYTE() << 16) + ((size_t) READ_BYTE() << 8) + ((size_t) READ_BYTE())
     #define READ_CONSTANT_LONG() (vm->s->constants.values[READ_UINT24()])
     #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \
@@ -177,6 +178,46 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_POP: pop(vm); break;
+            case OP_ARRAY_GET: {
+                value index = *(vm->stack_ptr-1);
+                if (!IS_ARRAY(*(vm->stack_ptr-2))) {
+                    runtime_error(vm, "Attempt to index non-array value.");
+                }
+                object_array *array = AS_ARRAY(*(vm->stack_ptr-2));
+                if (!IS_NUMBER(index)) {
+                    runtime_error(vm, "Expected number as array index.");
+                    break;
+                }
+                if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+                size_t index_int = (size_t) AS_NUMBER(index);
+                if (index_int >= array->arr.len) {
+                    runtime_error(vm, "Array index %lu exceeds length of array (%lu).", index_int, array->arr.len);
+                    break;
+                }
+                value at_index = array->arr.values[index_int];
+                pop(vm);
+                pop(vm);
+                push(vm, at_index);
+                break;
+            }
+            case OP_ARRAY_SET: {
+                value new_value = *(vm->stack_ptr-1);
+                value index = *(vm->stack_ptr-2);
+                if (!IS_ARRAY(*(vm->stack_ptr-3))) {
+                    runtime_error(vm, "Attempt to index non-array value.");
+                }
+                object_array *array = AS_ARRAY(*(vm->stack_ptr-3));
+                if (!IS_NUMBER(index)) {
+                    runtime_error(vm, "Expected number as array index.");
+                    break;
+                }
+                if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+                size_t index_int = (size_t) AS_NUMBER(index);
+                array_set(vm, array, index_int, new_value);
+                pop(vm);
+                pop(vm);
+                break;
+            }
             case OP_CONSTANT: {
                 value constant = READ_CONSTANT();
                 push(vm, constant);
@@ -227,6 +268,15 @@ static interpret_result run(VM *vm) {
                 push(vm, constant);
                 break;
             }
+            case OP_MAKE_ARRAY: {
+                size_t arr_size = READ_UINT56();
+                value *values = calloc(arr_size, sizeof(value));
+                for (long i = arr_size-1; i >= 0; i--) {
+                    values[i] = pop(vm);
+                }
+                object_array *array = allocate_array(vm, values, arr_size);
+                push(vm, OBJ_VAL(array));
+            }
         }
     }
 
@@ -234,6 +284,7 @@ static interpret_result run(VM *vm) {
     #undef READ_CONSTANT
     #undef READ_CONSTANT_LONG
     #undef READ_UINT24
+    #undef READ_UINT56
     #undef READ_STRING
     #undef BINARY_OP
 }

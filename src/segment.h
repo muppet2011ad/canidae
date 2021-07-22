@@ -5,6 +5,7 @@
 #include "value.h"
 
 #define UINT24_MAX 16777215
+#define UINT56_MAX 72057594037927935
 
 typedef enum {
     // No operand
@@ -26,6 +27,8 @@ typedef enum {
     OP_LESS_EQUAL,
     OP_PRINT,
     OP_POP,
+    OP_ARRAY_GET,
+    OP_ARRAY_SET,
     // One-byte operand
     OP_CONSTANT,
     OP_POPN,
@@ -36,6 +39,8 @@ typedef enum {
     OP_SET_GLOBAL,
     OP_GET_LOCAL,
     OP_SET_LOCAL,
+    // Seven-byte operand
+    OP_MAKE_ARRAY,
 } opcode;
 
 typedef struct {

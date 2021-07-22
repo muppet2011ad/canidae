@@ -292,6 +292,37 @@ static void expression(parser *p, compiler *c, VM *vm) {
     parse_precedence(p, c, vm, PREC_ASSIGNMENT);
 }
 
+static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    size_t nmeb = 0;
+    while (!check(p, TOKEN_RIGHT_SQR) && !check(p, TOKEN_EOF)) {
+        expression(p, c, vm);
+        nmeb++;
+        if (!check(p, TOKEN_RIGHT_SQR)) {
+            consume(p, TOKEN_COMMA, "Expect ',' to separate array elements.");
+        }
+        if (nmeb > UINT56_MAX) {
+            error(p, "Too many elements in array.");
+        }
+    }
+    consume(p, TOKEN_RIGHT_SQR, "Expect ']' after array.");
+    uint8_t bytes[8] = {OP_MAKE_ARRAY, nmeb >> 48, nmeb >> 40, nmeb >> 32, nmeb >> 24, nmeb >> 16, nmeb >> 8, nmeb};
+    emit_bytes(p, bytes, 8);
+}
+
+static void array_index(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    if (check(p, TOKEN_RIGHT_BRACE) || check(p, TOKEN_EOF)) {
+        error(p, "Expected array index.");
+    }
+    expression(p, c, vm);
+    consume(p, TOKEN_RIGHT_SQR, "Expect ']' after array index.");
+    if (can_assign && match(p, TOKEN_EQUAL)) {
+        expression(p, c, vm);
+        emit_byte(p, OP_ARRAY_SET);
+    } else {
+        emit_byte(p, OP_ARRAY_GET);
+    }
+}
+
 static void block(parser *p, compiler *c, VM *vm) {
     while (!check(p, TOKEN_RIGHT_BRACE) && !check(p, TOKEN_EOF)) {
         declaration(p, c, vm);
@@ -378,6 +409,8 @@ parse_rule rules[] = {
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_LEFT_SQR] = {array_dec, array_index, PREC_PRIMARY},
+    [TOKEN_RIGHT_SQR] = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
     [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},

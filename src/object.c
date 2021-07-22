@@ -54,10 +54,50 @@ object_string *copy_string(VM *vm, const char *chars, uint32_t length) {
     return allocate_string(vm, new_string, length, hash);
 }
 
+object_array *allocate_array(VM *vm, value *values, size_t length) {
+    object_array *array = ALLOCATE_OBJ(vm, object_array, OBJ_ARRAY);
+    init_value_array(&array->arr);
+    array->arr.values = values;
+    array->arr.len = length;
+    // Inefficient code to get the next power of two but what can you do
+    size_t pow = 1;
+    while (pow < array->arr.len) {
+        pow *= 2;
+    }
+    array->arr.values = GROW_ARRAY(value, array->arr.values, length, pow);
+    array->arr.capacity = pow;
+    return array;
+}
+
+void array_set(VM *vm, object_array *arr, size_t index, value val) {
+    // Following section is really slow and horrible code that probably could do with optimisation
+    while (index > arr->arr.capacity) {
+        size_t oldc = arr->arr.capacity;
+        arr->arr.capacity = GROW_CAPACITY(arr->arr.capacity);
+        arr->arr.values = GROW_ARRAY(value, arr->arr.values, oldc, arr->arr.capacity);
+        for (size_t i = oldc; i < arr->arr.capacity; i++) {
+            arr->arr.values[i] = NULL_VAL;
+        }
+    }
+    arr->arr.values[index] = val;
+    if (arr->arr.len < index+1) {
+        arr->arr.len = index+1;
+    }
+}
+
 void print_object(value v) {
     switch (GET_OBJ_TYPE(v)) {
         case OBJ_STRING:
             printf("%s", AS_CSTRING(v));
             break;
+        case OBJ_ARRAY:
+            printf("[");
+            object_array *array = AS_ARRAY(v);
+            for (size_t i = 0; i < array->arr.len-1; i++) {
+                print_value(array->arr.values[i]);
+                printf(", ");
+            }
+            print_value(array->arr.values[array->arr.len-1]);
+            printf("]");
     }
 }

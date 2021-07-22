@@ -26,6 +26,12 @@ static void free_object(object *obj) {
             FREE(object_string, obj);
             break;
         }
+        case OBJ_ARRAY:{
+            object_array *array = (object_array*) obj;
+            destroy_value_array(&array->arr);
+            FREE(object_array, obj);
+            break;
+        }
     }
 }
 

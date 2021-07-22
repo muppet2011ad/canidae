@@ -27,6 +27,12 @@ static size_t three_byte_instruction(const char *name, segment *s, int offset) {
     return offset + 4;
 }
 
+static size_t seven_byte_instrction(const char *name, segment *s, int offset) {
+    size_t arg = ((size_t) s->bytecode[offset+1] << 48) + ((size_t) s->bytecode[offset+2] << 40) + ((size_t) s->bytecode[offset+3] << 32) + ((size_t) s->bytecode[offset+4] << 24) + ((size_t) s->bytecode[offset+5] << 16) + ((size_t) s->bytecode[offset+5] << 8) + ((size_t) s->bytecode[offset+6] << 8) + ((size_t) s->bytecode[offset+7]);
+    printf("%-16s %5lu\n", name, arg);
+    return offset + 8;
+}
+
 static size_t constant_instruction(const char *name, segment *s, int offset) {
     uint8_t constant = s->bytecode[offset+1];
     printf("%-16s %5u '", name, constant);
@@ -89,6 +95,10 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_PRINT", offset);
         case OP_POP:
             return simple_instruction("OP_POP", offset);
+        case OP_ARRAY_GET:
+            return simple_instruction("OP_ARRAY_GET", offset);
+        case OP_ARRAY_SET:
+            return simple_instruction("OP_ARRAY_SET", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
@@ -105,6 +115,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return three_byte_instruction("OP_SET_LOCAL", s, offset);
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
+        case OP_MAKE_ARRAY:
+            return seven_byte_instrction("OP_MAKE_ARRAY", s, offset);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

@@ -180,6 +180,8 @@ token scan_token(scanner *s) {
         case ')': return make_token(s, TOKEN_RIGHT_PAREN);
         case '{': return make_token(s, TOKEN_LEFT_BRACE);
         case '}': return make_token(s, TOKEN_RIGHT_BRACE);
+        case '[': return make_token(s, TOKEN_LEFT_SQR);
+        case ']': return make_token(s, TOKEN_RIGHT_SQR);
         case ';': return make_token(s, TOKEN_SEMICOLON);
         case ',': return make_token(s, TOKEN_COMMA);
         case '.': return make_token(s, TOKEN_DOT);
