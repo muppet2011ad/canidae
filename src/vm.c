@@ -86,7 +86,7 @@ static uint8_t concatenate(VM *vm) {
             object_string *b = AS_STRING(pop(vm));
             object_string *a = AS_STRING(pop(vm));
             size_t len = a->length + b->length;
-            if (len > UINT32_MAX) {
+            if (len < a->length) {
                 runtime_error(vm, "String concatenation results in string larger than max string size.");
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -103,7 +103,7 @@ static uint8_t concatenate(VM *vm) {
             object_array *b = AS_ARRAY(pop(vm));
             object_array *a = AS_ARRAY(pop(vm));
             size_t len = a->arr.len + b->arr.len;
-            if (len > UINT56_MAX) {
+            if (len < a->arr.len) {
                 runtime_error(vm, "Array concatenation results in array larger than max array size.");
                 return INTERPRET_RUNTIME_ERROR;
             }
@@ -214,6 +214,10 @@ static interpret_result run(VM *vm) {
                             return INTERPRET_RUNTIME_ERROR;
                         }
                         if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+                        if (AS_NUMBER(index) > SIZE_MAX) {
+                            runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
                         size_t index_int = (size_t) AS_NUMBER(index);
                         if (index_int >= array->arr.len) {
                             runtime_error(vm, "Array index %lu exceeds max index of array (%lu).", index_int, array->arr.len-1);
@@ -232,6 +236,10 @@ static interpret_result run(VM *vm) {
                             return INTERPRET_RUNTIME_ERROR;
                         }
                         if (AS_NUMBER(index) < 0) index.as.number += string->length;
+                        if (AS_NUMBER(index) > SIZE_MAX) {
+                            runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
                         size_t index_int = (size_t) AS_NUMBER(index);
                         if (index_int >= string->length) {
                             runtime_error(vm, "Index %lu exceeds max index of string (%lu).", index_int, string->length-1);
@@ -259,6 +267,10 @@ static interpret_result run(VM *vm) {
                 object_array *array = AS_ARRAY(peek(vm, 2));
                 if (!IS_NUMBER(index)) {
                     runtime_error(vm, "Expected number as array index.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                if (AS_NUMBER(index) > SIZE_MAX) {
+                    runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;

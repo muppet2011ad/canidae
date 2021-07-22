@@ -300,7 +300,7 @@ static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         if (!check(p, TOKEN_RIGHT_SQR)) {
             consume(p, TOKEN_COMMA, "Expect ',' to separate array elements.");
         }
-        if (nmeb > UINT56_MAX) {
+        if (nmeb + 1 == 0) {
             error(p, "Too many elements in array.");
         }
     }
