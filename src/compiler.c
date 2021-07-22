@@ -256,7 +256,7 @@ static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t c
     else {
         arg = identifier_constant(p, c, vm, &name);
         get_op = OP_GET_GLOBAL;
-        set_op = OP_SET_LOCAL;
+        set_op = OP_SET_GLOBAL;
     }
     if (can_assign && match(p, TOKEN_EQUAL)) {
         expression(p, c, vm);
