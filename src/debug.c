@@ -95,6 +95,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_PRINT", offset);
         case OP_POP:
             return simple_instruction("OP_POP", offset);
+        case OP_MAKE_ARRAY:
+            return simple_instruction("OP_MAKE_ARRAY", offset);
         case OP_ARRAY_GET:
             return simple_instruction("OP_ARRAY_GET", offset);
         case OP_ARRAY_SET:
@@ -115,8 +117,6 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return three_byte_instruction("OP_SET_LOCAL", s, offset);
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
-        case OP_MAKE_ARRAY:
-            return seven_byte_instrction("OP_MAKE_ARRAY", s, offset);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

@@ -305,8 +305,8 @@ static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         }
     }
     consume(p, TOKEN_RIGHT_SQR, "Expect ']' after array.");
-    uint8_t bytes[8] = {OP_MAKE_ARRAY, nmeb >> 48, nmeb >> 40, nmeb >> 32, nmeb >> 24, nmeb >> 16, nmeb >> 8, nmeb};
-    emit_bytes(p, bytes, 8);
+    emit_constant(p, NUMBER_VAL((double) nmeb));
+    emit_byte(p, OP_MAKE_ARRAY);
 }
 
 static void array_index(parser *p, compiler *c, VM *vm, uint8_t can_assign) {

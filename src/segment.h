@@ -27,6 +27,7 @@ typedef enum {
     OP_LESS_EQUAL,
     OP_PRINT,
     OP_POP,
+    OP_MAKE_ARRAY,
     OP_ARRAY_GET,
     OP_ARRAY_SET,
     // One-byte operand
@@ -40,7 +41,6 @@ typedef enum {
     OP_GET_LOCAL,
     OP_SET_LOCAL,
     // Seven-byte operand
-    OP_MAKE_ARRAY,
 } opcode;
 
 typedef struct {

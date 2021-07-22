@@ -216,7 +216,7 @@ static interpret_result run(VM *vm) {
                         if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
                         size_t index_int = (size_t) AS_NUMBER(index);
                         if (index_int >= array->arr.len) {
-                            runtime_error(vm, "Array index %lu exceeds length of array (%lu).", index_int, array->arr.len);
+                            runtime_error(vm, "Array index %lu exceeds max index of array (%lu).", index_int, array->arr.len-1);
                             return INTERPRET_RUNTIME_ERROR;
                         }
                         value at_index = array->arr.values[index_int];
@@ -234,7 +234,7 @@ static interpret_result run(VM *vm) {
                         if (AS_NUMBER(index) < 0) index.as.number += string->length;
                         size_t index_int = (size_t) AS_NUMBER(index);
                         if (index_int >= string->length) {
-                            runtime_error(vm, "Index %lu exceeds length of string (%lu).", index_int, string->length);
+                            runtime_error(vm, "Index %lu exceeds max index of string (%lu).", index_int, string->length-1);
                             return INTERPRET_RUNTIME_ERROR;
                         }
                         object_string *result = copy_string(vm, &string->chars[index_int], 1);
@@ -319,7 +319,7 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_MAKE_ARRAY: {
-                size_t arr_size = READ_UINT56();
+                size_t arr_size = (size_t) AS_NUMBER(pop(vm));
                 value *values = calloc(arr_size, sizeof(value));
                 for (long i = arr_size-1; i >= 0; i--) {
                     values[i] = pop(vm);
