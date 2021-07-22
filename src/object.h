@@ -26,7 +26,7 @@ struct object {
 
 struct object_string {
     object obj;
-    uint32_t length;
+    size_t length;
     char *chars;
     uint32_t hash;
 };
@@ -36,8 +36,8 @@ struct object_array {
     value_array arr;
 };
 
-object_string *take_string(VM *vm, char *chars, uint32_t length);
-object_string *copy_string(VM *vm, const char *chars, uint32_t length);
+object_string *take_string(VM *vm, char *chars, size_t length);
+object_string *copy_string(VM *vm, const char *chars, size_t length);
 object_array *allocate_array(VM *vm, value *values, size_t length);
 void array_set(VM *vm, object_array *arr, size_t index, value val);
 value array_get(VM *vm, object_array *arr, size_t index);

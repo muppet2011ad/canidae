@@ -16,7 +16,7 @@ static object *allocate_object(VM* vm, size_t size, object_type type) {
     return obj;
 }
 
-static object_string *allocate_string(VM *vm, char *chars, uint32_t length, uint32_t hash) {
+static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
     string->chars = chars;
@@ -25,16 +25,16 @@ static object_string *allocate_string(VM *vm, char *chars, uint32_t length, uint
     return string;
 }
 
-static uint32_t hash_string(const char *key, uint32_t length) {
+static uint32_t hash_string(const char *key, size_t length) {
     uint32_t hash = 2166136261u;
-    for (uint32_t i = 0; i < length; i++) {
+    for (size_t i = 0; i < length; i++) {
         hash ^= (uint8_t)key[i];
         hash *= 16777619;
     }
     return hash;
 }
 
-object_string *take_string(VM *vm, char *chars, uint32_t length) {
+object_string *take_string(VM *vm, char *chars, size_t length) {
     uint32_t hash = hash_string(chars, length);
     object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
     if (interned != NULL) {
@@ -44,7 +44,7 @@ object_string *take_string(VM *vm, char *chars, uint32_t length) {
     return allocate_string(vm, chars, length, hash);
 }
 
-object_string *copy_string(VM *vm, const char *chars, uint32_t length) {
+object_string *copy_string(VM *vm, const char *chars, size_t length) {
     uint32_t hash = hash_string(chars, length);
     object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
     if (interned != NULL) return interned;

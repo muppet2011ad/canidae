@@ -80,17 +80,43 @@ static uint8_t is_falsey(value v) {
     return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0); // TODO: Make zero-length strings/arrays falsey when implemted
 }
 
-static void concatenate(VM *vm) {
-    object_string *b = AS_STRING(pop(vm));
-    object_string *a = AS_STRING(pop(vm));
-    uint32_t len = a->length + b->length;
-    char *chars = ALLOCATE(char, len + 1);
-    memcpy(chars, a->chars, a->length);
-    memcpy(chars + a->length, b->chars, b->length);
-    chars[len] = '\0';
+static uint8_t concatenate(VM *vm) {
+    switch (GET_OBJ_TYPE(peek(vm, 0))) {
+        case OBJ_STRING: {
+            object_string *b = AS_STRING(pop(vm));
+            object_string *a = AS_STRING(pop(vm));
+            size_t len = a->length + b->length;
+            if (len > UINT32_MAX) {
+                runtime_error(vm, "String concatenation results in string larger than max string size.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            char *chars = ALLOCATE(char, len + 1);
+            memcpy(chars, a->chars, a->length);
+            memcpy(chars + a->length, b->chars, b->length);
+            chars[len] = '\0';
 
-    object_string *result = take_string(vm, chars, len);
-    push(vm, OBJ_VAL(result));
+            object_string *result = take_string(vm, chars, len);
+            push(vm, OBJ_VAL(result));
+            break;
+        }
+        case OBJ_ARRAY: {
+            object_array *b = AS_ARRAY(pop(vm));
+            object_array *a = AS_ARRAY(pop(vm));
+            size_t len = a->arr.len + b->arr.len;
+            if (len > UINT56_MAX) {
+                runtime_error(vm, "Array concatenation results in array larger than max array size.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            value *values = calloc(len, sizeof(value));
+            memcpy(values, a->arr.values, a->arr.len*sizeof(value));
+            memcpy(values + a->arr.len, b->arr.values, b->arr.len*sizeof(value));
+            object_array *array = allocate_array(vm, values, len);
+            push(vm, OBJ_VAL(array));
+            break;
+        }
+        default: break; // Unreachable
+    }
+    return INTERPRET_OK;
 }
 
 static interpret_result run(VM *vm) {
@@ -137,15 +163,15 @@ static interpret_result run(VM *vm) {
                 (vm->stack_ptr-1)->as.number = -(vm->stack_ptr-1)->as.number;
                 break;
             case OP_ADD: {
-                if (IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) {
-                    concatenate(vm);
+                if ((IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) || (IS_ARRAY(peek(vm, 0)) && IS_ARRAY(peek(vm, 1)))) {
+                    if(concatenate(vm) == INTERPRET_RUNTIME_ERROR) return INTERPRET_RUNTIME_ERROR;
                 }
                 else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
                     double b = AS_NUMBER(pop(vm));
                     double a = AS_NUMBER(pop(vm));
                     push(vm, NUMBER_VAL(a + b));
                 } else {
-                    runtime_error(vm, "Operands must be two numbers or two strings");
+                    runtime_error(vm, "Operands must be two numbers, strings or arrays.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -179,37 +205,61 @@ static interpret_result run(VM *vm) {
             }
             case OP_POP: pop(vm); break;
             case OP_ARRAY_GET: {
-                value index = *(vm->stack_ptr-1);
-                if (!IS_ARRAY(*(vm->stack_ptr-2))) {
-                    runtime_error(vm, "Attempt to index non-array value.");
+                switch (GET_OBJ_TYPE(peek(vm, 1))) {
+                    case OBJ_ARRAY: {
+                        value index = peek(vm, 0);
+                        object_array *array = AS_ARRAY(peek(vm, 1));
+                        if (!IS_NUMBER(index)) {
+                            runtime_error(vm, "Expected number as array index.");
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+                        size_t index_int = (size_t) AS_NUMBER(index);
+                        if (index_int >= array->arr.len) {
+                            runtime_error(vm, "Array index %lu exceeds length of array (%lu).", index_int, array->arr.len);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        value at_index = array->arr.values[index_int];
+                        popn(vm, 2);
+                        push(vm, at_index);
+                        break;
+                    }
+                    case OBJ_STRING: {
+                        value index = peek(vm, 0);
+                        object_string *string = AS_STRING(peek(vm, 1));
+                        if (!IS_NUMBER(index)) {
+                            runtime_error(vm, "Expected number as array index.");
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        if (AS_NUMBER(index) < 0) index.as.number += string->length;
+                        size_t index_int = (size_t) AS_NUMBER(index);
+                        if (index_int >= string->length) {
+                            runtime_error(vm, "Index %lu exceeds length of string (%lu).", index_int, string->length);
+                            return INTERPRET_RUNTIME_ERROR;
+                        }
+                        object_string *result = copy_string(vm, &string->chars[index_int], 1);
+                        popn(vm, 2);
+                        push(vm, OBJ_VAL(result));
+                        break;
+                    }
+                    default: {
+                        runtime_error(vm, "Attempt to index value that is not a string or an array.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
-                object_array *array = AS_ARRAY(*(vm->stack_ptr-2));
-                if (!IS_NUMBER(index)) {
-                    runtime_error(vm, "Expected number as array index.");
-                    break;
-                }
-                if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
-                size_t index_int = (size_t) AS_NUMBER(index);
-                if (index_int >= array->arr.len) {
-                    runtime_error(vm, "Array index %lu exceeds length of array (%lu).", index_int, array->arr.len);
-                    break;
-                }
-                value at_index = array->arr.values[index_int];
-                pop(vm);
-                pop(vm);
-                push(vm, at_index);
                 break;
             }
             case OP_ARRAY_SET: {
-                value new_value = *(vm->stack_ptr-1);
-                value index = *(vm->stack_ptr-2);
-                if (!IS_ARRAY(*(vm->stack_ptr-3))) {
-                    runtime_error(vm, "Attempt to index non-array value.");
+                value new_value = peek(vm, 0);
+                value index = peek(vm, 1);
+                if (!IS_ARRAY(peek(vm, 2))) {
+                    runtime_error(vm, "Attempt to set at index of non-array value.");
+                    return INTERPRET_RUNTIME_ERROR;
                 }
-                object_array *array = AS_ARRAY(*(vm->stack_ptr-3));
+                object_array *array = AS_ARRAY(peek(vm, 2));
                 if (!IS_NUMBER(index)) {
                     runtime_error(vm, "Expected number as array index.");
-                    break;
+                    return INTERPRET_RUNTIME_ERROR;
                 }
                 if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
                 size_t index_int = (size_t) AS_NUMBER(index);

@@ -347,6 +347,9 @@ static void var_declaration(parser *p, compiler *c, VM *vm) {
     } else {
         emit_byte(p, OP_NULL);
     }
+    if (match(p, TOKEN_LEFT_SQR)) {
+        error(p, "Cannot declare array member as variable.");
+    }
     consume(p, TOKEN_SEMICOLON, "Expect ';' after variable declaration,");
     define_variable(p, c, global);
 }
@@ -479,7 +482,7 @@ static uint32_t identifier_constant(parser *p, compiler *c, VM *vm, token *name)
     for (uint32_t i = 0; i < seg->constants.len; i++) {
         if (IS_STRING(seg->constants.values[i])) {
             char *const_string = AS_CSTRING(seg->constants.values[i]);
-            uint32_t len = AS_STRING(seg->constants.values[i])->length;
+            size_t len = AS_STRING(seg->constants.values[i])->length;
             if (name->length == len && memcmp(const_string, name->start, len) == 0) {
                return i;
             }
