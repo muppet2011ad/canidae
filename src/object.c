@@ -93,11 +93,13 @@ void print_object(value v) {
         case OBJ_ARRAY:
             printf("[");
             object_array *array = AS_ARRAY(v);
-            for (size_t i = 0; i < array->arr.len-1; i++) {
-                print_value(array->arr.values[i]);
-                printf(", ");
+            if (array->arr.len != 0) {
+                for (size_t i = 0; i < array->arr.len-1; i++) {
+                    print_value(array->arr.values[i]);
+                    printf(", ");
+                }
+                print_value(array->arr.values[array->arr.len-1]);
             }
-            print_value(array->arr.values[array->arr.len-1]);
             printf("]");
     }
 }

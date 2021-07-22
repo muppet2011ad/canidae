@@ -332,12 +332,17 @@ static interpret_result run(VM *vm) {
             }
             case OP_MAKE_ARRAY: {
                 size_t arr_size = (size_t) AS_NUMBER(pop(vm));
+                if (arr_size == 0) {
+                    push(vm, OBJ_VAL(allocate_array(vm, NULL, 0)));
+                    break;
+                }
                 value *values = calloc(arr_size, sizeof(value));
                 for (long i = arr_size-1; i >= 0; i--) {
                     values[i] = pop(vm);
                 }
                 object_array *array = allocate_array(vm, values, arr_size);
                 push(vm, OBJ_VAL(array));
+                break;
             }
         }
     }
