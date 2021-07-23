@@ -29,7 +29,7 @@ static size_t three_byte_instruction(const char *name, segment *s, size_t offset
 
 static size_t jump_instruction(const char *name, segment *s, int sign, size_t offset) {
     uint64_t jump = ((uint64_t) s->bytecode[offset+1] << 32) + ((uint64_t) s->bytecode[offset+2] << 24) + ((uint64_t) s->bytecode[offset+3] << 16) + ((uint64_t) s->bytecode[offset+4] << 8) + ((uint64_t) s->bytecode[offset+5]);
-    printf("%-16s %4lu -> %lu\n", name, offset, offset + 6 + sign*jump);
+    printf("%-16s %5lu -> %lu\n", name, offset, offset + 6 + sign*jump);
     return offset + 6;
 }
 
