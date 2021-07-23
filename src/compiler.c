@@ -433,6 +433,48 @@ static void var_declaration(parser *p, compiler *c, VM *vm) {
     define_variable(p, c, global);
 }
 
+static void for_statement(parser *p, compiler *c, VM *vm) {
+    begin_scope(c);
+    if (match(p, TOKEN_SEMICOLON)) {
+        // No initialiser
+    }
+    else if (match(p, TOKEN_LET)) {
+        var_declaration(p, c, vm);
+    }
+    else {
+        expression_statement(p, c, vm);
+    }
+
+    size_t loop_start = current_seg()->len;
+    long exit_jump = -1;
+    if (!match(p, TOKEN_SEMICOLON)) {
+        expression(p, c, vm); // Evaluate condition
+        consume(p, TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+        exit_jump = emit_jump(p, OP_JUMP_IF_FALSE); // Emit jump to leave loop
+        emit_byte(p, OP_POP); // Pop result of condition expression
+    }
+    
+    if (!match(p, TOKEN_DO)) {
+        size_t body_jump = emit_jump(p, OP_JUMP);
+        size_t increment_start = current_seg()->len;
+        expression(p, c, vm);
+        emit_byte(p, OP_POP);
+        consume(p, TOKEN_DO, "Expect 'do' after for clauses.");
+        emit_loop(p, loop_start);
+        loop_start = increment_start;
+        patch_jump(p, body_jump);
+    }
+
+    statement(p, c, vm);
+    emit_loop(p, loop_start);
+    if (exit_jump != -1) {
+        patch_jump(p, (size_t) exit_jump);
+        emit_byte(p, OP_POP);
+    }
+    end_scope(p, c);
+}
+
+
 static void print_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after value.");
@@ -483,6 +525,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
     } 
     else if (match(p, TOKEN_WHILE)) {
         while_statement(p, c, vm);
+    }
+    else if (match(p, TOKEN_FOR)) {
+        for_statement(p, c, vm);
     }
     else if (match(p, TOKEN_IF)) {
         if_statement(p, c, vm);
