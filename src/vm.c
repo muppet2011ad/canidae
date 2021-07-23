@@ -360,6 +360,11 @@ static interpret_result run(VM *vm) {
                 vm->ip += offset;
                 break;
             }
+            case OP_LOOP: {
+                uint64_t offset = READ_UINT40();
+                vm->ip -= offset;
+                break;
+            }
         }
     }
 

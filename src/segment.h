@@ -8,6 +8,8 @@
 #define UINT40_MAX 1099511627775
 #define UINT56_MAX 72057594037927935
 
+#define JUMP_OFFSET_LEN 5
+
 typedef enum {
     // No operand
     OP_RETURN,
@@ -45,6 +47,7 @@ typedef enum {
     OP_JUMP_IF_FALSE,
     OP_JUMP_IF_TRUE,
     OP_JUMP,
+    OP_LOOP,
     // Seven-byte operand
 } opcode;
 

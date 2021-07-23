@@ -115,6 +115,7 @@ static token_type identifier_type(scanner *s) {
                 }
             }
             break;
+        case 'd': return check_keyword(s, 1, 1, "o", TOKEN_DO);
         case 'e': return check_keyword(s, 1, 3, "lse", TOKEN_ELSE);
         case 'f':
             if (s->current - s->start > 1) {

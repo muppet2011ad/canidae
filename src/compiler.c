@@ -167,7 +167,16 @@ static void emit_bytes(parser *p, uint8_t *bytes, size_t n) {
 static size_t emit_jump(parser *p, uint8_t instruction) {
     uint8_t bytes[6] = {instruction, 0xff, 0xff, 0xff, 0xff, 0xff};
     emit_bytes(p, bytes, 6);
-    return current_seg()->len - 5;
+    return current_seg()->len - JUMP_OFFSET_LEN;
+}
+
+static void emit_loop(parser *p, size_t loop_start) {
+    size_t offset = current_seg()->len - loop_start + JUMP_OFFSET_LEN + 1;
+    if (offset > UINT40_MAX) {
+        error(p, "Too much code to jump over.");
+    }
+    uint8_t bytes[6] = {OP_LOOP, (uint8_t) (offset >> 32), (uint8_t) (offset >> 24), (uint8_t) (offset >> 16), (uint8_t) (offset >> 8), (uint8_t) offset};
+    emit_bytes(p, bytes, 6);
 }
 
 static void emit_return(parser *p) {
@@ -182,7 +191,7 @@ static void emit_constant(parser *p, value v) {
 }
 
 static void patch_jump(parser *p, size_t offset) {
-    long jump = current_seg()->len - offset - 5;
+    long jump = current_seg()->len - offset - JUMP_OFFSET_LEN;
     if (jump > UINT40_MAX) {
         error(p, "Too much code to jump over.");
     }
@@ -335,6 +344,19 @@ static void if_statement(parser *p, compiler *c, VM *vm) {
     patch_jump(p, else_jump);
 }
 
+static void while_statement(parser *p, compiler *c, VM *vm) {
+    size_t loop_start = current_seg()->len;
+    expression(p, c, vm);
+    consume(p, TOKEN_DO, "Expect 'do' after loop condition.");
+
+    size_t skip_loop_jump = emit_jump(p, OP_JUMP_IF_FALSE);
+    emit_byte(p, OP_POP);
+    statement(p, c, vm);
+    emit_loop(p, loop_start);
+    patch_jump(p, skip_loop_jump);
+    emit_byte(p, OP_POP);
+}
+
 static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     size_t nmeb = 0;
     while (!check(p, TOKEN_RIGHT_SQR) && !check(p, TOKEN_EOF)) {
@@ -459,6 +481,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
         end_scope(p, c);
 
     } 
+    else if (match(p, TOKEN_WHILE)) {
+        while_statement(p, c, vm);
+    }
     else if (match(p, TOKEN_IF)) {
         if_statement(p, c, vm);
     } 

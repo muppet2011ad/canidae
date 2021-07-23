@@ -129,6 +129,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return jump_instruction("OP_JUMP_IF_TRUE", s, 1, offset);
         case OP_JUMP:
             return jump_instruction("OP_JUMP", s, 1, offset);
+        case OP_LOOP:
+            return jump_instruction("OP_LOOP", s, -1, offset);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;
