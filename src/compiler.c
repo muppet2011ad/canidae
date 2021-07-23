@@ -357,6 +357,19 @@ static void while_statement(parser *p, compiler *c, VM *vm) {
     emit_byte(p, OP_POP);
 }
 
+static void do_statement(parser *p, compiler *c, VM *vm) {
+    size_t loop_start = current_seg()->len;
+    statement(p, c, vm);
+    consume(p, TOKEN_WHILE, "Expect 'while' after do loop body.");
+    expression(p, c, vm);
+    consume(p, TOKEN_SEMICOLON, "Expect ';' after loop condition.");
+    size_t exit_jump = emit_jump(p, OP_JUMP_IF_FALSE);
+    emit_byte(p, OP_POP);
+    emit_loop(p, loop_start);
+    patch_jump(p, exit_jump);
+    emit_byte(p, OP_POP);
+}
+
 static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     size_t nmeb = 0;
     while (!check(p, TOKEN_RIGHT_SQR) && !check(p, TOKEN_EOF)) {
@@ -528,6 +541,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
     }
     else if (match(p, TOKEN_FOR)) {
         for_statement(p, c, vm);
+    }
+    else if (match(p, TOKEN_DO)) {
+        do_statement(p, c, vm);
     }
     else if (match(p, TOKEN_IF)) {
         if_statement(p, c, vm);
