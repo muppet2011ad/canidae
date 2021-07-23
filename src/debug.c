@@ -125,6 +125,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
         case OP_JUMP_IF_FALSE:
             return jump_instruction("OP_JUMP_IF_FALSE", s, 1, offset);
+        case OP_JUMP_IF_TRUE:
+            return jump_instruction("OP_JUMP_IF_TRUE", s, 1, offset);
         case OP_JUMP:
             return jump_instruction("OP_JUMP", s, 1, offset);
         default:

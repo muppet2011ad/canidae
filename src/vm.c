@@ -350,6 +350,11 @@ static interpret_result run(VM *vm) {
                 if (is_falsey(peek(vm, 0))) vm->ip += offset;
                 break;
             }
+            case OP_JUMP_IF_TRUE: {
+                uint64_t offset = READ_UINT40();
+                if (!is_falsey(peek(vm, 0))) vm->ip += offset;
+                break;
+            }
             case OP_JUMP: {
                 uint64_t offset = READ_UINT40();
                 vm->ip += offset;

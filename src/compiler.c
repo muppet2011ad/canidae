@@ -382,6 +382,20 @@ static void define_variable(parser *p, compiler *c, uint32_t global) {
     write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
 }
 
+static void and_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    size_t end_jump = emit_jump(p, OP_JUMP_IF_FALSE);
+    emit_byte(p, OP_POP);
+    parse_precedence(p, c, vm, PREC_AND);
+    patch_jump(p, end_jump);
+}
+
+static void or_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    size_t else_jump = emit_jump(p, OP_JUMP_IF_TRUE);
+    emit_byte(p, OP_POP);
+    parse_precedence(p, c, vm, PREC_OR);
+    patch_jump(p, else_jump);
+}
+
 static void var_declaration(parser *p, compiler *c, VM *vm) {
     uint32_t global = parse_variable(p, c, vm, "Expect variable name.");
 
@@ -479,7 +493,7 @@ parse_rule rules[] = {
     [TOKEN_IDENTIFIER] = {variable, NULL, PREC_NONE},
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
-    [TOKEN_AND] = {NULL, NULL, PREC_NONE},
+    [TOKEN_AND] = {NULL, and_, PREC_AND},
     [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
@@ -487,7 +501,7 @@ parse_rule rules[] = {
     [TOKEN_FUNCTION] = {NULL, NULL, PREC_NONE},
     [TOKEN_IF] = {NULL, NULL, PREC_NONE},
     [TOKEN_NULL] = {literal, NULL, PREC_NONE},
-    [TOKEN_OR] = {NULL, NULL, PREC_NONE},
+    [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
