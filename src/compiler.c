@@ -164,6 +164,12 @@ static void emit_bytes(parser *p, uint8_t *bytes, size_t n) {
     write_n_bytes_to_segment(current_seg(), bytes, n, p->prev.line);
 }
 
+static size_t emit_jump(parser *p, uint8_t instruction) {
+    uint8_t bytes[6] = {instruction, 0xff, 0xff, 0xff, 0xff, 0xff};
+    emit_bytes(p, bytes, 6);
+    return current_seg()->len - 5;
+}
+
 static void emit_return(parser *p) {
     emit_byte(p, OP_RETURN);
 }
@@ -173,6 +179,19 @@ static void emit_constant(parser *p, value v) {
     if (result == UINT32_MAX) {
         error(p, "Too many constants in one chunk.");
     }
+}
+
+static void patch_jump(parser *p, size_t offset) {
+    long jump = current_seg()->len - offset - 5;
+    if (jump > UINT40_MAX) {
+        error(p, "Too much code to jump over.");
+    }
+
+    current_seg()->bytecode[offset] = (uint8_t) (jump >> 32);
+    current_seg()->bytecode[offset+1] = (uint8_t) (jump >> 24);
+    current_seg()->bytecode[offset+2] = (uint8_t) (jump >> 16);
+    current_seg()->bytecode[offset+3] = (uint8_t) (jump >> 8);
+    current_seg()->bytecode[offset+4] = (uint8_t) jump;
 }
 
 static void end_compiler(parser *p) {
@@ -292,6 +311,30 @@ static void expression(parser *p, compiler *c, VM *vm) {
     parse_precedence(p, c, vm, PREC_ASSIGNMENT);
 }
 
+static void expression_statement(parser *p, compiler *c, VM *vm) {
+    expression(p, c, vm);
+    consume(p, TOKEN_SEMICOLON, "Expect ';' after expression.");
+    emit_byte(p, OP_POP);
+}
+
+static void if_statement(parser *p, compiler *c, VM *vm) {
+    expression(p, c, vm);
+    consume(p, TOKEN_THEN, "Expect 'then' after condition.");
+    size_t then_jump = emit_jump(p, OP_JUMP_IF_FALSE);
+    emit_byte(p, OP_POP);
+    statement(p, c, vm);
+
+    size_t else_jump = emit_jump(p, OP_JUMP);
+
+    patch_jump(p, then_jump);
+    emit_byte(p, OP_POP);
+
+    if (match(p, TOKEN_ELSE)) {
+        statement(p, c, vm);
+    }
+    patch_jump(p, else_jump);
+}
+
 static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     size_t nmeb = 0;
     while (!check(p, TOKEN_RIGHT_SQR) && !check(p, TOKEN_EOF)) {
@@ -395,15 +438,18 @@ static void declaration(parser *p, compiler *c, VM *vm) {
 static void statement(parser *p, compiler *c, VM *vm) {
     if (match(p, TOKEN_PRINT)) {
         print_statement(p, c, vm);
-    } else if (match(p, TOKEN_LEFT_BRACE)) {
+    } 
+    else if (match(p, TOKEN_LEFT_BRACE)) {
         begin_scope(c);
         block(p, c, vm);
         end_scope(p, c);
 
-    } else {
-        expression(p, c, vm);
-        consume(p, TOKEN_SEMICOLON, "Expect ';' after expression.");
-        emit_byte(p, OP_POP);
+    } 
+    else if (match(p, TOKEN_IF)) {
+        if_statement(p, c, vm);
+    } 
+    else {
+        expression_statement(p, c, vm);
     }
 }
 

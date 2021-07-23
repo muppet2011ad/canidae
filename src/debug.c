@@ -10,30 +10,36 @@ void disassemble_segment(segment *s, const char *name) {
     }
 }
 
-static size_t simple_instruction(const char *name, int offset) {
+static size_t simple_instruction(const char *name, size_t offset) {
     printf("%s\n", name);
     return offset + 1;
 }
 
-static size_t raw_byte_instruction(const char *name, segment *s, int offset) {
+static size_t raw_byte_instruction(const char *name, segment *s, size_t offset) {
     uint8_t byte = s->bytecode[offset+1];
     printf("%-16s %5u\n", name, byte);
     return offset + 2;
 }
 
-static size_t three_byte_instruction(const char *name, segment *s, int offset) {
+static size_t three_byte_instruction(const char *name, segment *s, size_t offset) {
     uint32_t arg = ((uint32_t) s->bytecode[offset+1] << 16) + ((uint32_t) s->bytecode[offset+2] << 8) + ((uint32_t) s->bytecode[offset+3]);
     printf("%-16s %5u\n", name, arg);
     return offset + 4;
 }
 
-static size_t seven_byte_instrction(const char *name, segment *s, int offset) {
+static size_t jump_instruction(const char *name, segment *s, int sign, size_t offset) {
+    uint64_t jump = ((uint64_t) s->bytecode[offset+1] << 32) + ((uint64_t) s->bytecode[offset+2] << 24) + ((uint64_t) s->bytecode[offset+3] << 16) + ((uint64_t) s->bytecode[offset+4] << 8) + ((uint64_t) s->bytecode[offset+5]);
+    printf("%-16s %4lu -> %lu\n", name, offset, offset + 6 + sign*jump);
+    return offset + 6;
+}
+
+static size_t seven_byte_instrction(const char *name, segment *s, size_t offset) {
     uint64_t arg = ((uint64_t) s->bytecode[offset+1] << 48) + ((uint64_t) s->bytecode[offset+2] << 40) + ((uint64_t) s->bytecode[offset+3] << 32) + ((uint64_t) s->bytecode[offset+4] << 24) + ((uint64_t) s->bytecode[offset+5] << 16) + ((uint64_t) s->bytecode[offset+5] << 8) + ((uint64_t) s->bytecode[offset+6] << 8) + ((uint64_t) s->bytecode[offset+7]);
     printf("%-16s %5lu\n", name, arg);
     return offset + 8;
 }
 
-static size_t constant_instruction(const char *name, segment *s, int offset) {
+static size_t constant_instruction(const char *name, segment *s, size_t offset) {
     uint8_t constant = s->bytecode[offset+1];
     printf("%-16s %5u '", name, constant);
     print_value(s->constants.values[constant]);
@@ -41,7 +47,7 @@ static size_t constant_instruction(const char *name, segment *s, int offset) {
     return offset + 2;
 }
 
-static size_t constant_long_instruction(const char *name, segment *s, int offset) {
+static size_t constant_long_instruction(const char *name, segment *s, size_t offset) {
     uint32_t constant = (s->bytecode[offset+1] << 16) + (s->bytecode[offset+2] << 8) + (s->bytecode[offset+3]);
     printf("%-16s %5u '", name, constant);
     print_value(s->constants.values[constant]);
@@ -117,6 +123,10 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return three_byte_instruction("OP_SET_LOCAL", s, offset);
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
+        case OP_JUMP_IF_FALSE:
+            return jump_instruction("OP_JUMP_IF_FALSE", s, 1, offset);
+        case OP_JUMP:
+            return jump_instruction("OP_JUMP", s, 1, offset);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

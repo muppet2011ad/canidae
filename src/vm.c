@@ -281,6 +281,20 @@ static interpret_result run(VM *vm) {
                 pop(vm);
                 break;
             }
+            case OP_MAKE_ARRAY: {
+                size_t arr_size = (size_t) AS_NUMBER(pop(vm));
+                if (arr_size == 0) {
+                    push(vm, OBJ_VAL(allocate_array(vm, NULL, 0)));
+                    break;
+                }
+                value *values = calloc(arr_size, sizeof(value));
+                for (long i = arr_size-1; i >= 0; i--) {
+                    values[i] = pop(vm);
+                }
+                object_array *array = allocate_array(vm, values, arr_size);
+                push(vm, OBJ_VAL(array));
+                break;
+            }
             case OP_CONSTANT: {
                 value constant = READ_CONSTANT();
                 push(vm, constant);
@@ -331,18 +345,14 @@ static interpret_result run(VM *vm) {
                 push(vm, constant);
                 break;
             }
-            case OP_MAKE_ARRAY: {
-                size_t arr_size = (size_t) AS_NUMBER(pop(vm));
-                if (arr_size == 0) {
-                    push(vm, OBJ_VAL(allocate_array(vm, NULL, 0)));
-                    break;
-                }
-                value *values = calloc(arr_size, sizeof(value));
-                for (long i = arr_size-1; i >= 0; i--) {
-                    values[i] = pop(vm);
-                }
-                object_array *array = allocate_array(vm, values, arr_size);
-                push(vm, OBJ_VAL(array));
+            case OP_JUMP_IF_FALSE: {
+                uint64_t offset = READ_UINT40();
+                if (is_falsey(peek(vm, 0))) vm->ip += offset;
+                break;
+            }
+            case OP_JUMP: {
+                uint64_t offset = READ_UINT40();
+                vm->ip += offset;
                 break;
             }
         }
@@ -352,6 +362,7 @@ static interpret_result run(VM *vm) {
     #undef READ_CONSTANT
     #undef READ_CONSTANT_LONG
     #undef READ_UINT24
+    #undef READ_UINT40
     #undef READ_UINT56
     #undef READ_STRING
     #undef BINARY_OP

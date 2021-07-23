@@ -5,6 +5,7 @@
 #include "value.h"
 
 #define UINT24_MAX 16777215
+#define UINT40_MAX 1099511627775
 #define UINT56_MAX 72057594037927935
 
 typedef enum {
@@ -40,6 +41,9 @@ typedef enum {
     OP_SET_GLOBAL,
     OP_GET_LOCAL,
     OP_SET_LOCAL,
+    // Five-byte operand
+    OP_JUMP_IF_FALSE,
+    OP_JUMP,
     // Seven-byte operand
 } opcode;
 

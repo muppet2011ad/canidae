@@ -135,7 +135,14 @@ static token_type identifier_type(scanner *s) {
         case 't':
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {
-                    case 'h': return check_keyword(s, 2, 2, "is", TOKEN_THIS);
+                    case 'h': {
+                        if (s->current - s->start > 2) {
+                            switch (s->start[2]) {
+                                case 'i': return check_keyword(s, 3, 1, "s", TOKEN_THIS);
+                                case 'e': return check_keyword(s, 3, 1, "n", TOKEN_THEN);
+                            }
+                        }
+                    }
                     case 'r': return check_keyword(s, 2, 2, "ue", TOKEN_TRUE);
                 }
             }
