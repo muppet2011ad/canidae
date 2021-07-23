@@ -123,7 +123,8 @@ static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
-    #define READ_UINT56() ((size_t) READ_BYTE() << 48) + ((size_t) READ_BYTE() << 40) + ((size_t) READ_BYTE() << 32) + ((size_t) READ_BYTE() << 24) + ((size_t) READ_BYTE() << 16) + ((size_t) READ_BYTE() << 8) + ((size_t) READ_BYTE())
+    #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
+    #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_CONSTANT_LONG() (vm->s->constants.values[READ_UINT24()])
     #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \

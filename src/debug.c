@@ -28,7 +28,7 @@ static size_t three_byte_instruction(const char *name, segment *s, int offset) {
 }
 
 static size_t seven_byte_instrction(const char *name, segment *s, int offset) {
-    size_t arg = ((size_t) s->bytecode[offset+1] << 48) + ((size_t) s->bytecode[offset+2] << 40) + ((size_t) s->bytecode[offset+3] << 32) + ((size_t) s->bytecode[offset+4] << 24) + ((size_t) s->bytecode[offset+5] << 16) + ((size_t) s->bytecode[offset+5] << 8) + ((size_t) s->bytecode[offset+6] << 8) + ((size_t) s->bytecode[offset+7]);
+    uint64_t arg = ((uint64_t) s->bytecode[offset+1] << 48) + ((uint64_t) s->bytecode[offset+2] << 40) + ((uint64_t) s->bytecode[offset+3] << 32) + ((uint64_t) s->bytecode[offset+4] << 24) + ((uint64_t) s->bytecode[offset+5] << 16) + ((uint64_t) s->bytecode[offset+5] << 8) + ((uint64_t) s->bytecode[offset+6] << 8) + ((uint64_t) s->bytecode[offset+7]);
     printf("%-16s %5lu\n", name, arg);
     return offset + 8;
 }
