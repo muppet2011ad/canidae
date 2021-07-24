@@ -71,7 +71,7 @@ object_array *allocate_array(VM *vm, value *values, size_t length) {
 
 void array_set(VM *vm, object_array *arr, size_t index, value val) {
     // Following section is really slow and horrible code that probably could do with optimisation
-    while (index > arr->arr.capacity) {
+    while (index >= arr->arr.capacity) {
         size_t oldc = arr->arr.capacity;
         arr->arr.capacity = GROW_CAPACITY(arr->arr.capacity);
         arr->arr.values = GROW_ARRAY(value, arr->arr.values, oldc, arr->arr.capacity);
