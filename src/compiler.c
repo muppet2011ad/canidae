@@ -273,6 +273,19 @@ static void string(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     emit_constant(p, OBJ_VAL(copy_string(vm, p->prev.start + 1, p->prev.length -2)));
 }
 
+static void assign_with_op(parser *p, compiler *c, VM *vm, uint32_t arg, opcode get_op, opcode set_op, opcode op, uint8_t can_eval_expr) {
+    uint8_t get_bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
+    write_n_bytes_to_segment(current_seg(), get_bytes, 4, p->prev.line);
+    if (can_eval_expr) {
+        expression(p, c, vm);
+    } else {
+        emit_constant(p, NUMBER_VAL(1));
+    }
+    emit_byte(p, op);
+    uint8_t set_bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
+    write_n_bytes_to_segment(current_seg(), set_bytes, 4, p->prev.line);
+}
+
 static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t can_assign) {
     uint8_t get_op, set_op;
     long arg_long = resolve_local(p, c, &name);
@@ -286,12 +299,39 @@ static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t c
         get_op = OP_GET_GLOBAL;
         set_op = OP_SET_GLOBAL;
     }
-    if (can_assign && match(p, TOKEN_EQUAL)) {
-        expression(p, c, vm);
-        uint8_t bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
-
-    } else {
+    if (can_assign) {
+        if (match(p, TOKEN_EQUAL)) {
+            expression(p, c, vm);
+            uint8_t bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
+            write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+        }
+        else if (match(p, TOKEN_PLUS_EQUAL)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_ADD, 1);
+        }
+        else if (match(p, TOKEN_MINUS_EQUAL)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_SUBTRACT, 1);
+        }
+        else if (match(p, TOKEN_STAR_EQUAL)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_MULTIPLY, 1);
+        }
+        else if (match(p, TOKEN_SLASH_EQUAL)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_DIVIDE, 1);
+        }
+        else if (match(p, TOKEN_CARET_EQUAL)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_POWER, 1);
+        }
+        else if (match(p, TOKEN_PLUS_PLUS)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_ADD, 0);
+        }
+        else if (match(p, TOKEN_MINUS_MINUS)) {
+            assign_with_op(p, c, vm, arg, get_op, set_op, OP_SUBTRACT, 0);
+        }
+        else {
+            uint8_t bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
+            write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+        }
+    }
+    else {
         uint8_t bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
         write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
     }

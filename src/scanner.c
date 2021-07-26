@@ -193,11 +193,16 @@ token scan_token(scanner *s) {
         case ';': return make_token(s, TOKEN_SEMICOLON);
         case ',': return make_token(s, TOKEN_COMMA);
         case '.': return make_token(s, TOKEN_DOT);
-        case '-': return make_token(s, TOKEN_MINUS);
-        case '+': return make_token(s, TOKEN_PLUS);
-        case '/': return make_token(s, TOKEN_SLASH);
-        case '*': return make_token(s, TOKEN_STAR);
-        case '^': return make_token(s, TOKEN_CARET);
+        case '-': 
+            return make_token(s, match(s, '=') ? TOKEN_MINUS_EQUAL : (match(s, '-') ? TOKEN_MINUS_MINUS : TOKEN_MINUS));
+        case '+': 
+            return make_token(s, match(s, '=') ? TOKEN_PLUS_EQUAL : (match(s, '+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS));
+        case '/': 
+            return make_token(s, match(s, '=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
+        case '*': 
+            return make_token(s, match(s, '=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
+        case '^': 
+            return make_token(s, match(s, '=') ? TOKEN_CARET_EQUAL : TOKEN_CARET);
         case '!':
             return make_token(s, match(s, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '=':
