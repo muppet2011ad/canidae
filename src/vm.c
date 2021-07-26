@@ -129,6 +129,10 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
                 return INTERPRET_RUNTIME_ERROR;
             }
             if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+            if (AS_NUMBER(index) < 0) {
+                runtime_error(vm, "Index is less than min index of array (-%lu).", array->arr.len-1);
+                return INTERPRET_RUNTIME_ERROR;
+            }
             if (AS_NUMBER(index) > SIZE_MAX) {
                 runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
                 return INTERPRET_RUNTIME_ERROR;
@@ -151,6 +155,10 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
                 return INTERPRET_RUNTIME_ERROR;
             }
             if (AS_NUMBER(index) < 0) index.as.number += string->length;
+            if (AS_NUMBER(index) < 0) {
+                runtime_error(vm, "Index is less than min index of string (-%lu).", string->length-1);
+                return INTERPRET_RUNTIME_ERROR;
+            }
             if (AS_NUMBER(index) > SIZE_MAX) {
                 runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
                 return INTERPRET_RUNTIME_ERROR;
