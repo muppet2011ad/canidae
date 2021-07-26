@@ -107,11 +107,25 @@ static token_type check_keyword(scanner *s, uint32_t start, uint32_t length, con
 static token_type identifier_type(scanner *s) {
     switch (s->start[0]) {
         case 'a': return check_keyword(s, 1, 2, "nd", TOKEN_AND);
+        case 'b': return check_keyword(s, 1, 4, "reak", TOKEN_BREAK);
         case 'c': 
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {
                     case 'l': return check_keyword(s, 2, 3, "ass", TOKEN_CLASS);
-                    case 'o': return check_keyword(s, 2, 3, "nst", TOKEN_CONST);
+                    case 'o': {
+                        if (s->current - s->start > 2) {
+                            switch (s->start[2]) {
+                                case 'n': {
+                                    if (s->current - s->start > 3) {
+                                        switch (s->start[3]) {
+                                            case 's': return check_keyword(s, 4, 2, "st", TOKEN_CONST);
+                                            case 't': return check_keyword(s, 4, 4, "inue", TOKEN_CONTINUE);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             break;

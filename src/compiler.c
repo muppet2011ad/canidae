@@ -25,10 +25,25 @@ typedef struct {
 } local;
 
 typedef struct {
+    uint8_t sentinel;
+    size_t continue_addr;
+    long scope_depth;
+    size_t *breaks;
+    size_t num_breaks;
+    size_t break_capacity;
+    size_t *continues; // Only stores do-while continues that are actually jumps forward
+    size_t num_continues;
+    size_t continue_capacity;
+} loop;
+
+typedef struct {
     local *locals;
     long local_count;
     uint32_t local_capacity;
     long scope_depth;
+    loop *loops;
+    long num_loops;
+    size_t loop_capacity;
 } compiler;
 
 typedef enum {
@@ -63,6 +78,15 @@ static void parse_precedence(parser *p, compiler *c, VM *vm, precedence prec);
 static uint32_t identifier_constant(parser *p, compiler *c, VM *vm, token *name);
 static long resolve_local(parser *p, compiler *c, token *name);
 static void mark_initialised(compiler *c);
+static void push_loop_stack(compiler *c, size_t cont_addr, long scope_depth, uint8_t sentinel);
+static void pop_loop_stack(compiler *c);
+static loop *peek_loop_stack(compiler *c);
+static void push_loop_sentinel(compiler *c);
+static size_t get_continue_addr(compiler *c);
+static uint8_t is_in_loop(compiler *c);
+static void add_break(compiler *c, size_t break_addr);
+static void add_continue(compiler *c, size_t cont_addr);
+static void free_loop(loop l);
 
 segment *compiling_segment;
 
@@ -70,11 +94,18 @@ static void init_compiler(compiler *c) {
     c->local_count = 0;
     c->local_capacity = 0;
     c->scope_depth = 0;
+    c->loop_capacity = 0;
+    c->num_loops = 0;
     c->locals = NULL;
+    c->loops = NULL;
 }
 
 static void destroy_compiler(compiler *c) {
     FREE_ARRAY(local, c->locals, c->local_capacity);
+    for (size_t i = 0; i < c->num_loops; i++) {
+        free_loop(c->loops[i]);
+    }
+    FREE_ARRAY(loop, c->loops, c->loop_capacity);
     init_compiler(c);
 }
 
@@ -201,6 +232,38 @@ static void patch_jump(parser *p, size_t offset) {
     current_seg()->bytecode[offset+2] = (uint8_t) (jump >> 16);
     current_seg()->bytecode[offset+3] = (uint8_t) (jump >> 8);
     current_seg()->bytecode[offset+4] = (uint8_t) jump;
+}
+
+static void patch_breaks(parser *p, compiler *c) {
+    loop *l = peek_loop_stack(c);
+    for (size_t i = 0; i < l->num_breaks; i++) {
+        patch_jump(p, l->breaks[i]);
+    }
+}
+
+static void patch_continues(parser *p, compiler *c) {
+    loop *l = peek_loop_stack(c);
+    for (size_t i = 0; i < l->num_continues; i++) {
+        patch_jump(p, l->continues[i]);
+    }
+}
+
+static void exit_loop_scope(parser *p, compiler *c) {
+    loop *l = peek_loop_stack(c);
+    long to_pop = 0;
+    long local_count = c->local_count;
+    while (local_count > 0 && c->locals[local_count-1].depth > l->scope_depth) {
+        to_pop++;
+        local_count--;
+    }
+    for (; to_pop > 0; to_pop-=255) {
+        if (to_pop >= 255) {
+            emit_2_bytes(p, OP_POPN, 255);
+        }
+        else {
+            emit_2_bytes(p, OP_POPN, to_pop);
+        }
+    }
 }
 
 static void end_compiler(parser *p) {
@@ -411,6 +474,7 @@ static void if_statement(parser *p, compiler *c, VM *vm) {
 
 static void while_statement(parser *p, compiler *c, VM *vm) {
     size_t loop_start = current_seg()->len;
+    push_loop_stack(c, loop_start, c->scope_depth, 0);
     expression(p, c, vm);
     consume(p, TOKEN_DO, "Expect 'do' after loop condition.");
 
@@ -419,20 +483,51 @@ static void while_statement(parser *p, compiler *c, VM *vm) {
     statement(p, c, vm);
     emit_loop(p, loop_start);
     patch_jump(p, skip_loop_jump);
+    patch_breaks(p, c);
     emit_byte(p, OP_POP);
+    pop_loop_stack(c);
 }
 
 static void do_statement(parser *p, compiler *c, VM *vm) {
     size_t loop_start = current_seg()->len;
+    push_loop_stack(c, SIZE_MAX, c->scope_depth, 0);
     statement(p, c, vm);
     consume(p, TOKEN_WHILE, "Expect 'while' after do loop body.");
+    patch_continues(p, c);
     expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after loop condition.");
     size_t exit_jump = emit_jump(p, OP_JUMP_IF_FALSE);
     emit_byte(p, OP_POP);
     emit_loop(p, loop_start);
     patch_jump(p, exit_jump);
+    patch_breaks(p, c);
     emit_byte(p, OP_POP);
+    pop_loop_stack(c);
+}
+
+static void continue_statement(parser *p, compiler *c, VM *vm) {
+    if (!is_in_loop(c)) {
+        error(p, "Unexpected 'break' outside of loop body.");
+        return;
+    }
+    exit_loop_scope(p, c);
+    if (get_continue_addr(c) == SIZE_MAX) {
+        add_continue(c, emit_jump(p, OP_JUMP));
+    }
+    else {
+        emit_loop(p, get_continue_addr(c));
+    }
+    consume(p, TOKEN_SEMICOLON, "Expected ';' at end of break statement.");
+}
+
+static void break_statement(parser *p, compiler *c, VM *vm) {
+    if (!is_in_loop(c)) {
+        error(p, "Unexpected 'break' outside of loop body.");
+        return;
+    }
+    exit_loop_scope(p, c);
+    add_break(c, emit_jump(p, OP_JUMP));
+    consume(p, TOKEN_SEMICOLON, "Expected ';' at end of break statement.");
 }
 
 static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
@@ -549,12 +644,16 @@ static void for_statement(parser *p, compiler *c, VM *vm) {
         patch_jump(p, body_jump);
     }
 
+    push_loop_stack(c, loop_start, c->scope_depth, 0);
+
     statement(p, c, vm);
     emit_loop(p, loop_start);
     if (exit_jump != -1) {
         patch_jump(p, (size_t) exit_jump);
         emit_byte(p, OP_POP);
     }
+    patch_breaks(p, c);
+    pop_loop_stack(c);
     end_scope(p, c);
 }
 
@@ -619,6 +718,12 @@ static void statement(parser *p, compiler *c, VM *vm) {
     else if (match(p, TOKEN_IF)) {
         if_statement(p, c, vm);
     } 
+    else if (match(p, TOKEN_CONTINUE)) {
+        continue_statement(p, c, vm);
+    }
+    else if (match(p, TOKEN_BREAK)) {
+        break_statement(p, c, vm);
+    }
     else {
         expression_statement(p, c, vm);
     }
@@ -740,6 +845,79 @@ static void add_local(parser *p, compiler *c, token name) {
     local *l = &c->locals[c->local_count++];
     l->name = name;
     l->depth = -1;
+}
+
+static void push_loop_stack(compiler *c, size_t cont_addr, long scope_depth, uint8_t sentinel) {
+    if (c->num_loops >= c->loop_capacity) {
+        size_t oldc = c->loop_capacity;
+        c->loop_capacity = GROW_CAPACITY(oldc);
+        c->loops = GROW_ARRAY(loop, c->loops, oldc, c->loop_capacity);
+    }
+    loop l;
+    l.continue_addr = cont_addr;
+    l.scope_depth = scope_depth;
+    l.sentinel = sentinel;
+    l.breaks = NULL;
+    l.break_capacity = 0;
+    l.num_breaks = 0;
+    l.continues = NULL;
+    l.continue_capacity = 0;
+    l.num_continues = 0;
+    c->loops[c->num_loops] = l;
+    c->num_loops++;
+}
+
+static void pop_loop_stack(compiler *c) {
+    c->num_loops--;
+    free_loop(c->loops[c->num_loops]);
+}
+
+static loop *peek_loop_stack(compiler *c) {
+    return &c->loops[c->num_loops-1];
+}
+
+static void push_loop_sentinel(compiler *c) {
+    push_loop_stack(c, 0, 0, 1);
+}
+
+static size_t get_continue_addr(compiler *c) {
+    loop l = *peek_loop_stack(c);
+    if (l.sentinel == 1) {
+        return SIZE_MAX;
+    }
+    return l.continue_addr;
+
+}
+
+static uint8_t is_in_loop(compiler *c) {
+    return c->num_loops > 0 && !peek_loop_stack(c)->sentinel;
+}
+
+static void add_break(compiler *c, size_t break_addr) {
+    loop *l = peek_loop_stack(c);
+    if (l->num_breaks >= l->break_capacity) {
+        size_t oldc = l->break_capacity;
+        l->break_capacity = GROW_CAPACITY(oldc);
+        l->breaks = GROW_ARRAY(size_t, l->breaks, oldc, l->break_capacity);
+    }
+    l->breaks[l->num_breaks] = break_addr;
+    l->num_breaks++;
+}
+
+static void add_continue(compiler *c, size_t cont_addr) {
+    loop *l = peek_loop_stack(c);
+    if (l->num_continues >= l->continue_capacity) {
+        size_t oldc = l->continue_capacity;
+        l->continue_capacity = GROW_CAPACITY(oldc);
+        l->continues = GROW_ARRAY(size_t, l->continues, oldc, l->continue_capacity);
+    }
+    l->continues[l->num_continues] = cont_addr;
+    l->num_continues++;
+}
+
+static void free_loop(loop l) {
+    FREE_ARRAY(size_t, l.breaks, l.break_capacity);
+    FREE_ARRAY(size_t, l.continues, l.continue_capacity);
 }
 
 static void declare_variable(parser *p, compiler *c) {
