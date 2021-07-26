@@ -56,6 +56,12 @@ void destroy_segment(segment *s) {
 }
 
 size_t add_constant(segment *s, value val) {
+    size_t id = 0;
+    for (; id < s->constants.len; id++) {
+        if (value_equality(s->constants.values[id], val)) {
+            return id;
+        }
+    }
     write_to_value_array(&s->constants, val);
-    return s->constants.len - 1;
+    return id;
 }
