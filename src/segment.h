@@ -32,6 +32,7 @@ typedef enum {
     OP_POP,
     OP_MAKE_ARRAY,
     OP_ARRAY_GET,
+    OP_ARRAY_GET_KEEP_REF,
     OP_ARRAY_SET,
     // One-byte operand
     OP_CONSTANT,

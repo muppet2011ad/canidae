@@ -119,6 +119,60 @@ static uint8_t concatenate(VM *vm) {
     return INTERPRET_OK;
 }
 
+static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
+    switch (GET_OBJ_TYPE(peek(vm, 1))) {
+        case OBJ_ARRAY: {
+            value index = peek(vm, 0);
+            object_array *array = AS_ARRAY(peek(vm, 1));
+            if (!IS_NUMBER(index)) {
+                runtime_error(vm, "Expected number as array index.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+            if (AS_NUMBER(index) > SIZE_MAX) {
+                runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            size_t index_int = (size_t) AS_NUMBER(index);
+            if (index_int >= array->arr.len) {
+                runtime_error(vm, "Array index %lu exceeds max index of array (%lu).", index_int, array->arr.len-1);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            value at_index = array->arr.values[index_int];
+            if(!keep_ref) popn(vm, 2);
+            push(vm, at_index);
+            break;
+        }
+        case OBJ_STRING: {
+            value index = peek(vm, 0);
+            object_string *string = AS_STRING(peek(vm, 1));
+            if (!IS_NUMBER(index)) {
+                runtime_error(vm, "Expected number as array index.");
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            if (AS_NUMBER(index) < 0) index.as.number += string->length;
+            if (AS_NUMBER(index) > SIZE_MAX) {
+                runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            size_t index_int = (size_t) AS_NUMBER(index);
+            if (index_int >= string->length) {
+                runtime_error(vm, "Index %lu exceeds max index of string (%lu).", index_int, string->length-1);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            object_string *result = copy_string(vm, &string->chars[index_int], 1);
+            popn(vm, 2);
+            push(vm, OBJ_VAL(result));
+            break;
+        }
+        default: {
+            runtime_error(vm, "Attempt to index value that is not a string or an array.");
+            return INTERPRET_RUNTIME_ERROR;
+        }
+    }
+    return INTERPRET_OK;
+}
+
 static interpret_result run(VM *vm) {
     #define READ_BYTE() (*vm->ip++)
     #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
@@ -206,55 +260,14 @@ static interpret_result run(VM *vm) {
             }
             case OP_POP: pop(vm); break;
             case OP_ARRAY_GET: {
-                switch (GET_OBJ_TYPE(peek(vm, 1))) {
-                    case OBJ_ARRAY: {
-                        value index = peek(vm, 0);
-                        object_array *array = AS_ARRAY(peek(vm, 1));
-                        if (!IS_NUMBER(index)) {
-                            runtime_error(vm, "Expected number as array index.");
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
-                        if (AS_NUMBER(index) > SIZE_MAX) {
-                            runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        size_t index_int = (size_t) AS_NUMBER(index);
-                        if (index_int >= array->arr.len) {
-                            runtime_error(vm, "Array index %lu exceeds max index of array (%lu).", index_int, array->arr.len-1);
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        value at_index = array->arr.values[index_int];
-                        popn(vm, 2);
-                        push(vm, at_index);
-                        break;
-                    }
-                    case OBJ_STRING: {
-                        value index = peek(vm, 0);
-                        object_string *string = AS_STRING(peek(vm, 1));
-                        if (!IS_NUMBER(index)) {
-                            runtime_error(vm, "Expected number as array index.");
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        if (AS_NUMBER(index) < 0) index.as.number += string->length;
-                        if (AS_NUMBER(index) > SIZE_MAX) {
-                            runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        size_t index_int = (size_t) AS_NUMBER(index);
-                        if (index_int >= string->length) {
-                            runtime_error(vm, "Index %lu exceeds max index of string (%lu).", index_int, string->length-1);
-                            return INTERPRET_RUNTIME_ERROR;
-                        }
-                        object_string *result = copy_string(vm, &string->chars[index_int], 1);
-                        popn(vm, 2);
-                        push(vm, OBJ_VAL(result));
-                        break;
-                    }
-                    default: {
-                        runtime_error(vm, "Attempt to index value that is not a string or an array.");
-                        return INTERPRET_RUNTIME_ERROR;
-                    }
+                if(vm_array_get(vm, 0) == INTERPRET_RUNTIME_ERROR) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_ARRAY_GET_KEEP_REF: {
+                if(vm_array_get(vm, 1) == INTERPRET_RUNTIME_ERROR) {
+                    return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
             }

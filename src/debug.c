@@ -105,6 +105,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_MAKE_ARRAY", offset);
         case OP_ARRAY_GET:
             return simple_instruction("OP_ARRAY_GET", offset);
+        case OP_ARRAY_GET_KEEP_REF:
+            return simple_instruction("OP_ARRAY_GET_KEEP_REF", offset);
         case OP_ARRAY_SET:
             return simple_instruction("OP_ARRAY_SET", offset);
         case OP_CONSTANT:
