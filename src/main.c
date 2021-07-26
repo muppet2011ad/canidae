@@ -22,7 +22,7 @@ static void repl(VM *vm) {
 static char *read_file(const char *path) {
     FILE *f = fopen(path, "rb");
     if (f == NULL) {
-        fprintf(stderr, "Could not oen file \"%s\".\n", path);
+        fprintf(stderr, "Could not open file \"%s\".\n", path);
         exit(74);
     }
     fseek(f, 0L, SEEK_END);
