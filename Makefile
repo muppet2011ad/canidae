@@ -33,8 +33,9 @@ bin/canidae_debug: $(DEBUG_DEPS) bin
 bin/canidae: $(MAIN_DEPS) bin
 	gcc $(OPTS) -O3  -lm $(MAIN_DEPS) -o bin/canidae
 
-test_report: bin/canidae test
+test_report: bin/canidae test/*
 	-python -m pytest > test_report
+	cat test_report
 
 clean:
 	rm bin/*

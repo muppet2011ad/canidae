@@ -1,0 +1,2 @@
+let x = "Hello";
+let y = x + true;

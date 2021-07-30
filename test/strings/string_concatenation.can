@@ -1,0 +1,7 @@
+let x = "Hello,";
+let y = " World";
+print x + y;
+x = x + y;
+print x + "!";
+x += "!";
+print x;
