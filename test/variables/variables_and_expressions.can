@@ -1,0 +1,6 @@
+{
+    let x = 2 + 3;
+    let y = 7 * 6;
+    let z = 2 ^ 5;
+    print x + y - z;
+}
