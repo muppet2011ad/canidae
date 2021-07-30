@@ -3,3 +3,4 @@ bin
 program
 *.pyc
 programs
+test_report
