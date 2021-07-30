@@ -53,8 +53,8 @@ jobs:
 
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
-    #- name: Autobuild
-    #  uses: github/codeql-action/autobuild@v1
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v1
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 https://git.io/JvXDl
@@ -63,25 +63,25 @@ jobs:
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
 
-    - if: matrix.language == 'cpp'
-      name: Build canidae
-      run: |
-          - name: Install GCC
-          # You may pin to the exact commit or the version.
-          # uses: egor-tensin/setup-gcc@68c2121a5509df386aa0c58a1bfed2663849d364
-          uses: egor-tensin/setup-gcc@v1
-          with: |
-            # GCC version to install
-            version: # optional, default is latest
-            # Target platform
-            platform: # optional, default is x64
-            # Install Cygwin packages
-            cygwin: # optional, default is 0
-            # Set up cc/c++ executables
-            cc: # optional, default is 1
-            # On Cygwin, replace executable symlinks with hardlinks
-            hardlinks: # optional, default is 0
-          make bin/canidae
+    #- if: matrix.language == 'cpp'
+    #  name: Build canidae
+    #  run: |
+    #      - name: Install GCC
+    #      # You may pin to the exact commit or the version.
+    #      # uses: egor-tensin/setup-gcc@68c2121a5509df386aa0c58a1bfed2663849d364
+    #      uses: egor-tensin/setup-gcc@v1
+    #      with: |
+    #        # GCC version to install
+    #        version: # optional, default is latest
+    #        # Target platform
+    #        platform: # optional, default is x64
+    #        # Install Cygwin packages
+    #        cygwin: # optional, default is 0
+    #        # Set up cc/c++ executables
+    #        cc: # optional, default is 1
+    #        # On Cygwin, replace executable symlinks with hardlinks
+    #        hardlinks: # optional, default is 0
+    #      make bin/canidae
     #   make release
 
     - name: Perform CodeQL Analysis
