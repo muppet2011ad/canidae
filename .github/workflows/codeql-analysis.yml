@@ -13,10 +13,10 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ master muppet2011ad-fix-workflow ]
+    branches: [ master, muppet2011ad-fix-workflow ]
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: [ master muppet2011ad-fix-workflow ]
+    branches: [ master, muppet2011ad-fix-workflow ]
   schedule:
     - cron: '40 6 * * 6'
 
