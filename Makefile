@@ -33,7 +33,7 @@ bin/canidae_debug: $(DEBUG_DEPS) bin
 	gcc $(OPTS) $(DEBUG_OPTS) $(LIBS) -g  -lm $(DEBUG_DEPS) -o bin/canidae_debug
 
 bin/canidae: $(MAIN_DEPS) bin
-	gcc $(OPTS) $(LIBS) -O3  -lm $(MAIN_DEPS) -o bin/canidae
+	gcc $(OPTS) -O3  $(MAIN_DEPS) $(LIBS) -o bin/canidae
 
 test_report: bin/canidae test/*
 	-python -m pytest > test_report
