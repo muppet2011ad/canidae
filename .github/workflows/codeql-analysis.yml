@@ -13,10 +13,10 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master muppet2011ad-fix-workflow ]
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: [ master ]
+    branches: [ master muppet2011ad-fix-workflow ]
   schedule:
     - cron: '40 6 * * 6'
 
@@ -66,7 +66,22 @@ jobs:
     - if: matrix.language == 'cpp'
       name: Build canidae
       run: |
-        make bin/canidae
+          - name: Install GCC
+          # You may pin to the exact commit or the version.
+          # uses: egor-tensin/setup-gcc@68c2121a5509df386aa0c58a1bfed2663849d364
+          uses: egor-tensin/setup-gcc@v1
+          with: |
+            # GCC version to install
+            version: # optional, default is latest
+            # Target platform
+            platform: # optional, default is x64
+            # Install Cygwin packages
+            cygwin: # optional, default is 0
+            # Set up cc/c++ executables
+            cc: # optional, default is 1
+            # On Cygwin, replace executable symlinks with hardlinks
+            hardlinks: # optional, default is 0
+          make bin/canidae
     #   make release
 
     - name: Perform CodeQL Analysis
