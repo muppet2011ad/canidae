@@ -1,3 +1,5 @@
+LIBS := -lm
+
 OPTS := -Wall -pedantic -std=c11
 
 DEBUG_OPTS := -DDEBUG_PRINT_CODE
@@ -16,22 +18,22 @@ canidae: bin/canidae
 canidae_debug: bin/canidae_debug
 
 bin/main_debug.o: src/main.c bin
-	gcc $(OPTS) $(DEBUG_OPTS) -c src/main.c -g -fpic -o bin/main_debug.o
+	gcc $(OPTS) $(DEBUG_OPTS) $(LIBS) -c src/main.c -g -fpic -o bin/main_debug.o
 
 bin/%_debug.o: src/%.c src/common.h src/segment.h src/%.h bin
-	gcc $(OPTS) $(DEBUG_OPTS) -c $< -g -fpic -o $@
+	gcc $(OPTS) $(DEBUG_OPTS) $(LIBS) -c $< -g -fpic -o $@
 
 bin/main.o: src/main.c bin
-	gcc $(OPTS) -c src/main.c -O3 -fpic -o bin/main.o
+	gcc $(OPTS) $(LIBS) -c src/main.c -O3 -fpic -o bin/main.o
 
 bin/%.o: src/%.c src/common.h src/segment.h src/%.h bin
-	gcc $(OPTS) -c $< -O3 -fpic -o $@
+	gcc $(OPTS) $(LIBS) -c $< -O3 -fpic -o $@
 
 bin/canidae_debug: $(DEBUG_DEPS) bin
-	gcc $(OPTS) $(DEBUG_OPTS) -g  -lm $(DEBUG_DEPS) -o bin/canidae_debug
+	gcc $(OPTS) $(DEBUG_OPTS) $(LIBS) -g  -lm $(DEBUG_DEPS) -o bin/canidae_debug
 
 bin/canidae: $(MAIN_DEPS) bin
-	gcc $(OPTS) -O3  -lm $(MAIN_DEPS) -o bin/canidae
+	gcc $(OPTS) $(LIBS) -O3  -lm $(MAIN_DEPS) -o bin/canidae
 
 test_report: bin/canidae test/*
 	-python -m pytest > test_report
