@@ -1,0 +1,4 @@
+print 5;
+print true;
+print null;
+print "Hello World!";

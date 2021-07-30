@@ -1,0 +1,7 @@
+print 1 + 1;
+print 5 - 2;
+print 6 * 3;
+print 24 / 6;
+print 5 ^ 5;
+print 4 - 8;
+print 23 / 6;
