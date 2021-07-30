@@ -8,26 +8,29 @@ DEBUG_DEPS := bin/memory_debug.o bin/segment_debug.o bin/main_debug.o bin/debug_
 
 all: bin/canidae bin/canidae_debug
 
+bin:
+	mkdir bin
+
 canidae: bin/canidae
 
 canidae_debug: bin/canidae_debug
 
-bin/main_debug.o: src/main.c
+bin/main_debug.o: src/main.c bin
 	gcc $(OPTS) $(DEBUG_OPTS) -c src/main.c -g -fpic -o bin/main_debug.o
 
-bin/%_debug.o: src/%.c src/common.h src/segment.h src/%.h
+bin/%_debug.o: src/%.c src/common.h src/segment.h src/%.h bin
 	gcc $(OPTS) $(DEBUG_OPTS) -c $< -g -fpic -o $@
 
-bin/main.o: src/main.c
+bin/main.o: src/main.c bin
 	gcc $(OPTS) -c src/main.c -O3 -fpic -o bin/main.o
 
-bin/%.o: src/%.c src/common.h src/segment.h src/%.h
+bin/%.o: src/%.c src/common.h src/segment.h src/%.h bin
 	gcc $(OPTS) -c $< -O3 -fpic -o $@
 
-bin/canidae_debug: $(DEBUG_DEPS)
+bin/canidae_debug: $(DEBUG_DEPS) bin
 	gcc $(OPTS) $(DEBUG_OPTS) -g  -lm $(DEBUG_DEPS) -o bin/canidae_debug
 
-bin/canidae: $(MAIN_DEPS)
+bin/canidae: $(MAIN_DEPS) bin
 	gcc $(OPTS) -O3  -lm $(MAIN_DEPS) -o bin/canidae
 
 test_report: bin/canidae test
