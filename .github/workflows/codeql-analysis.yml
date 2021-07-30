@@ -63,8 +63,10 @@ jobs:
     #    and modify them (or add more) to build your code if your project
     #    uses a compiled language
 
-    - run: |
-       make bin/canidae
+    - if: matrix.language == 'cpp'
+      name: Build canidae
+      run: |
+        make bin/canidae
     #   make release
 
     - name: Perform CodeQL Analysis
