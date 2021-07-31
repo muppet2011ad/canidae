@@ -83,8 +83,8 @@ static uint8_t is_falsey(value v) {
 static uint8_t concatenate(VM *vm) {
     switch (GET_OBJ_TYPE(peek(vm, 0))) {
         case OBJ_STRING: {
-            object_string *b = AS_STRING(pop(vm));
-            object_string *a = AS_STRING(pop(vm));
+            object_string *b = AS_STRING(peek(vm, 0));
+            object_string *a = AS_STRING(peek(vm, 1));
             size_t len = a->length + b->length;
             if (len < a->length) {
                 runtime_error(vm, "String concatenation results in string larger than max string size.");
@@ -94,14 +94,14 @@ static uint8_t concatenate(VM *vm) {
             memcpy(chars, a->chars, a->length);
             memcpy(chars + a->length, b->chars, b->length);
             chars[len] = '\0';
-
             object_string *result = take_string(vm, chars, len);
+            popn(vm, 2);
             push(vm, OBJ_VAL(result));
             break;
         }
         case OBJ_ARRAY: {
-            object_array *b = AS_ARRAY(pop(vm));
-            object_array *a = AS_ARRAY(pop(vm));
+            object_array *b = AS_ARRAY(peek(vm, 0));
+            object_array *a = AS_ARRAY(peek(vm, 1));
             size_t len = a->arr.len + b->arr.len;
             if (len < a->arr.len) {
                 runtime_error(vm, "Array concatenation results in array larger than max array size.");
@@ -111,6 +111,7 @@ static uint8_t concatenate(VM *vm) {
             memcpy(values, a->arr.values, a->arr.len*sizeof(value));
             memcpy(values + a->arr.len, b->arr.values, b->arr.len*sizeof(value));
             object_array *array = allocate_array(vm, values, len);
+            popn(vm, 2);
             push(vm, OBJ_VAL(array));
             break;
         }
@@ -310,7 +311,7 @@ static interpret_result run(VM *vm) {
                 }
                 value *values = calloc(arr_size, sizeof(value));
                 for (long i = arr_size-1; i >= 0; i--) {
-                    values[i] = pop(vm);
+                    values[i] = peek(vm, arr_size-1-i);
                 }
                 object_array *array = allocate_array(vm, values, arr_size);
                 push(vm, OBJ_VAL(array));

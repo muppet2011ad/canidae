@@ -21,7 +21,9 @@ static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32
     string->length = length;
     string->chars = chars;
     string->hash = hash;
+    push(vm, OBJ_VAL(string));
     hashmap_set(&vm->strings, string, NULL_VAL);
+    pop(vm);
     return string;
 }
 
