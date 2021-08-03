@@ -87,6 +87,16 @@ void array_set(VM *vm, object_array *arr, size_t index, value val) {
     }
 }
 
+uint8_t array_equality(object_array *a, object_array *b) {
+    if (a->arr.len == b->arr.len) {
+        for (size_t i = 0; i < a->arr.len; i++) {
+            if (!value_equality(a->arr.values[i], b->arr.values[i])) return 0;
+        }
+        return 1;
+    }
+    else return 0;
+}
+
 void print_object(value v) {
     switch (GET_OBJ_TYPE(v)) {
         case OBJ_STRING:

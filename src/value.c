@@ -47,7 +47,18 @@ uint8_t value_equality(value a, value b) {
         case BOOL_TYPE: return AS_BOOL(a) == AS_BOOL(b);
         case NULL_TYPE: return 1;
         case NUM_TYPE: return AS_NUMBER(a) == AS_NUMBER(b);
-        case OBJ_TYPE: return AS_OBJ(a) == AS_OBJ(b);
+        case OBJ_TYPE: {
+            if (GET_OBJ_TYPE(a) == GET_OBJ_TYPE(b)) {
+                switch (GET_OBJ_TYPE(a)) {
+                    case OBJ_ARRAY:{
+                        return array_equality(AS_ARRAY(a), AS_ARRAY(b));
+                    }
+                    default: return AS_OBJ(a) == AS_OBJ(b);
+                }
+            }
+            else return 0;
+            
+        }
         default: return 0;
     }
 }
