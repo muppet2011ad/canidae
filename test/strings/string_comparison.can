@@ -1,0 +1,31 @@
+// Less
+print "a" < "b"; // true
+print "a" < "a"; // false
+print "b" < "a"; // false
+print "aaaa" < "aaaaa"; // true
+print "aaaaa" < "aaaa"; // false
+print "Aardvark" < "Badger"; // true
+
+// Less/equal
+print "a" <= "b"; // true
+print "a" <= "a"; // true
+print "b" <= "a"; // false
+print "aaaa" <= "aaaaa"; // true
+print "aaaaa" <= "aaaa"; // false
+print "Aardvark" <= "Badger"; // true
+
+// Greater/equal
+print "a" >= "b"; // false
+print "a" >= "a"; // true
+print "b" >= "a"; // true
+print "aaaa" >= "aaaaa"; // false
+print "aaaaa" >= "aaaa"; // true
+print "Aardvark" >= "Badger"; // false
+
+// Greater
+print "a" > "b"; // false
+print "a" > "a"; // false
+print "b" > "a"; // true
+print "aaaa" > "aaaaa"; // false
+print "aaaaa" > "aaaa"; // true
+print "Aardvark" > "Badger"; // false

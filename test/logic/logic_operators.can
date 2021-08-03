@@ -1,0 +1,23 @@
+// And
+print true and true; // true
+print true and false; // false
+print false and true; // false
+print false and false; // false
+
+// Or
+print true or true; // true
+print true or false; // true
+print false or true; // true
+print false or false; // false
+
+// Respects truthiness
+print !(1 and "Hello"); // false
+print !(1 and []); // true
+print 1 and 0; // 0
+print 0 or 1; // 1
+
+// Short-circuiting
+print true or 1; // true
+print false or 1; // 1
+print false and 1; // false
+print true and 1; // 1

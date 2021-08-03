@@ -1,0 +1,20 @@
+// This covers inequality for just numbers, string comparison is tested in the strings folder
+// Less
+print 1 < 2; // true
+print 2 < 1; // false
+print 1 < 1; // false
+
+// Less/equal
+print 1 <= 2; // true
+print 2 <= 1; // false
+print 1 <= 1; // true
+
+// Greater/equal
+print 1 >= 2; // false
+print 2 >= 1; // true
+print 1 >= 1; // true
+
+// Greater
+print 1 > 2; // false
+print 2 > 1; // true
+print 1 > 1; // false

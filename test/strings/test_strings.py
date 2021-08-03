@@ -80,3 +80,34 @@ def test_string_concat_wrong_type():
     assert lines[0].startswith("Operands must be two numbers, strings")
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
+
+def string_comparison():
+    completed = subprocess.run(["bin/canidae",  "test/strings/string_comparison.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 25
+    assert lines[0] == "true"
+    assert lines[1] == "false"
+    assert lines[2] == "false"
+    assert lines[3] == "true"
+    assert lines[4] == "false"
+    assert lines[5] == "true"
+    assert lines[6] == "true"
+    assert lines[7] == "true"
+    assert lines[8] == "false"
+    assert lines[9] == "true"
+    assert lines[10] == "false"
+    assert lines[11] == "true"
+    assert lines[12] == "false"
+    assert lines[13] == "true"
+    assert lines[14] == "true"
+    assert lines[15] == "false"
+    assert lines[16] == "false"
+    assert lines[17] == "false"
+    assert lines[18] == "false"
+    assert lines[19] == "false"
+    assert lines[20] == "true"
+    assert lines[21] == "false"
+    assert lines[22] == "true"
+    assert lines[23] == "false"
+    assert lines[24] == ""

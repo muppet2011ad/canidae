@@ -1,0 +1,10 @@
+// Not operator
+print !true; // false
+print !false; // true
+print !0; // true
+print !1; // false
+print !""; // true
+print !"Hello, World"; // false
+print ![]; // true
+print ![1, 2, 3]; // false
+print !null; // true

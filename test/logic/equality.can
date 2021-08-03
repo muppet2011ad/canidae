@@ -1,0 +1,31 @@
+// Equality operator
+print "1" == 1; // false
+print 1 == 1; // true
+print 1 == 2; // false
+print "apple" == "orange"; // false
+print "apple" == "apple"; // true
+print true == true; // true
+print true == false; // false
+print false == false; // true
+print null == null; // true
+print 0 == null; // false
+print [0] == [0]; // true
+print [1 + 2, 3 + 4] == [1 + 2, 3 + 4]; // true
+print [[1 + 2, 3 + 4], 0] == [[1 + 2, 3 + 4], 0]; // true
+print [1, 2, 3] == [3, 2, 1]; // false
+
+// Not equal
+print "1" != 1; // true
+print 1 != 1; // false
+print 1 != 2; // true
+print "apple" != "orange"; // true
+print "apple" != "apple"; // false
+print true != true; // false
+print true != false; // true
+print false != false; // false
+print null != null; // false
+print 0 != null; // true
+print [0] != [0]; // false
+print [1 + 2, 3 + 4] != [1 + 2, 3 + 4]; // false
+print [[1 + 2, 3 + 4], 0] != [[1 + 2, 3 + 4], 0]; // false
+print [1, 2, 3] != [3, 2, 1]; // true
