@@ -66,7 +66,7 @@ value pop(VM *vm) {
     return *vm->stack_ptr;
 }
 
-value popn(VM *vm, uint8_t n) {
+value popn(VM *vm, size_t n) {
     vm->stack_ptr -= n;
     vm->stack_len -= n;
     return *vm->stack_ptr;
@@ -314,6 +314,7 @@ static interpret_result run(VM *vm) {
                     values[i] = peek(vm, arr_size-1-i);
                 }
                 object_array *array = allocate_array(vm, values, arr_size);
+                popn(vm, arr_size);
                 push(vm, OBJ_VAL(array));
                 break;
             }
