@@ -201,6 +201,40 @@ static interpret_result run(VM *vm) {
             push(vm, type(a op b)); \
         } while (0)
 
+    #define BINARY_COMPARISON(t, op) \
+        do { \
+            value b = peek(vm, 0); \
+            value a = peek(vm, 1); \
+            if (a.type != b.type) { \
+                runtime_error(vm, "Cannot perform comparison on values of different type."); \
+                return INTERPRET_RUNTIME_ERROR; \
+            } \
+            switch (a.type) { \
+                case NUM_TYPE: BINARY_OP(t, op); break; \
+                case OBJ_TYPE: { \
+                    if (GET_OBJ_TYPE(a) != GET_OBJ_TYPE(b)) { \
+                        runtime_error(vm, "Cannot perform comparison on objects of different type."); \
+                        return INTERPRET_RUNTIME_ERROR; \
+                    } \
+                    switch (GET_OBJ_TYPE(a)) { \
+                        case OBJ_STRING: { \
+                            popn(vm, 2); \
+                            push(vm, BOOL_VAL(string_comparison(AS_STRING(a), AS_STRING(b)) op 0)); \
+                            break; \
+                        } \
+                        default: { \
+                            runtime_error(vm, "Unsupported type for comparison operator"); \
+                            return INTERPRET_RUNTIME_ERROR; \
+                        } \
+                    } \
+                    break; \
+                } \
+                default: { \
+                    runtime_error(vm, "Unsupported type for comparison operator"); \
+                    return INTERPRET_RUNTIME_ERROR; \
+                } \
+            } \
+        } while (0)
 
     for (;;) {
         uint8_t instruction;
@@ -258,10 +292,10 @@ static interpret_result run(VM *vm) {
                 push(vm, BOOL_VAL(value_equality(a, b)));
                 break;
             }
-            case OP_GREATER: BINARY_OP(BOOL_VAL, >); break;
-            case OP_GREATER_EQUAL: BINARY_OP(BOOL_VAL, >=); break;
-            case OP_LESS: BINARY_OP(BOOL_VAL, <); break;
-            case OP_LESS_EQUAL: BINARY_OP(BOOL_VAL, <=); break;
+            case OP_GREATER: BINARY_COMPARISON(BOOL_VAL, >); break;
+            case OP_GREATER_EQUAL: BINARY_COMPARISON(BOOL_VAL, >=); break;
+            case OP_LESS: BINARY_COMPARISON(BOOL_VAL, <); break;
+            case OP_LESS_EQUAL: BINARY_COMPARISON(BOOL_VAL, <=); break;
             case OP_PRINT: {
                 print_value(pop(vm));
                 printf("\n");
@@ -398,6 +432,7 @@ static interpret_result run(VM *vm) {
     #undef READ_UINT40
     #undef READ_UINT56
     #undef READ_STRING
+    #undef BINARY_COMPARISON
     #undef BINARY_OP
 }
 

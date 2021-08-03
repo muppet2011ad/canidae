@@ -42,6 +42,7 @@ object_array *allocate_array(VM *vm, value *values, size_t length);
 void array_set(VM *vm, object_array *arr, size_t index, value val);
 value array_get(VM *vm, object_array *arr, size_t index);
 uint8_t array_equality(object_array *a, object_array *b);
+int8_t string_comparison(object_string *a, object_string *b);
 void print_object(value v);
 
 static inline uint8_t is_obj_type(value v, object_type type) {

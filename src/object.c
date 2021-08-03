@@ -87,6 +87,20 @@ void array_set(VM *vm, object_array *arr, size_t index, value val) {
     }
 }
 
+int8_t string_comparison(object_string *a, object_string *b) {
+    if (a == b) return 0;
+    size_t str_len;
+    uint8_t a_is_shorter = a->length < b->length;
+    if (a_is_shorter) str_len = a->length;
+    else str_len = b->length;
+    int8_t result = strncmp(a->chars, b->chars, str_len);
+    if (result == 0) {
+        if (a_is_shorter) return -1;
+        else return 1; 
+    }
+    return result;
+}
+
 uint8_t array_equality(object_array *a, object_array *b) {
     if (a->arr.len == b->arr.len) {
         for (size_t i = 0; i < a->arr.len; i++) {
