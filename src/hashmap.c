@@ -92,7 +92,7 @@ uint8_t hashmap_delete(hashmap *h, object_string *key) {
 }
 
 void hashmap_copy_all(hashmap *from, hashmap *to) {
-    for (uint32_t i; i < from->capacity; i++) {
+    for (uint32_t i = 0; i < from->capacity; i++) {
         kv_pair *entry = &from->entries[i];
         if (entry->k != NULL) {
             hashmap_set(to, entry->k, entry->v);
