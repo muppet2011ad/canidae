@@ -131,7 +131,7 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
             }
             if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
             if (AS_NUMBER(index) < 0) {
-                runtime_error(vm, "Index is less than min index of array (-%lu).", array->arr.len-1);
+                runtime_error(vm, "Index is less than min index of array (-%lu).", array->arr.len);
                 return INTERPRET_RUNTIME_ERROR;
             }
             if (AS_NUMBER(index) > SIZE_MAX) {
@@ -157,7 +157,7 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
             }
             if (AS_NUMBER(index) < 0) index.as.number += string->length;
             if (AS_NUMBER(index) < 0) {
-                runtime_error(vm, "Index is less than min index of string (-%lu).", string->length-1);
+                runtime_error(vm, "Index is less than min index of string (-%lu).", string->length);
                 return INTERPRET_RUNTIME_ERROR;
             }
             if (AS_NUMBER(index) > SIZE_MAX) {
@@ -331,6 +331,10 @@ static interpret_result run(VM *vm) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
+                if (AS_NUMBER(index) < 0) {
+                    runtime_error(vm, "Index is less than min index of string (-%lu).", array->arr.len);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
                 size_t index_int = (size_t) AS_NUMBER(index);
                 array_set(vm, array, index_int, new_value);
                 pop(vm);
