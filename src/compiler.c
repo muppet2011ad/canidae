@@ -483,8 +483,8 @@ static void while_statement(parser *p, compiler *c, VM *vm) {
     statement(p, c, vm);
     emit_loop(p, loop_start);
     patch_jump(p, skip_loop_jump);
-    patch_breaks(p, c);
     emit_byte(p, OP_POP);
+    patch_breaks(p, c);
     pop_loop_stack(c);
 }
 
@@ -500,8 +500,8 @@ static void do_statement(parser *p, compiler *c, VM *vm) {
     emit_byte(p, OP_POP);
     emit_loop(p, loop_start);
     patch_jump(p, exit_jump);
-    patch_breaks(p, c);
     emit_byte(p, OP_POP);
+    patch_breaks(p, c);
     pop_loop_stack(c);
 }
 
