@@ -1,0 +1,9 @@
+{
+    let x = 0;
+    while x < 10 do x++;
+    print x;
+    while x < 12 do {
+        x++;
+        print x;
+    }
+}

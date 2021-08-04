@@ -1,0 +1,18 @@
+{
+    let x = 0;
+    while x < 10 do {
+        if x == 3 then break;
+        x++;
+    }
+    print x; // 3
+    let y = 0;
+    while y < 5 do {
+        let z = 0;
+        y++;
+        while z < 5 do {
+            z++;
+            if z == 2 then break;
+        }
+    }
+    print y; // 5
+}

@@ -1,0 +1,21 @@
+{
+    let x = 0;
+    let xp = 0;
+    while x < 10 do {
+        x++;
+        if x == 3 then continue;
+        xp++;
+    }
+    print xp; // 9
+    let y = 0;
+    let z = 0;
+    while y < 5 do {
+        y++;
+        while z < 5 do {
+            z++;
+            if z == 2 then continue;
+        }
+    }
+    print y; // 5
+    print z; // 5
+}
