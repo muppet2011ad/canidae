@@ -49,7 +49,7 @@ def test_string_array_index_oob_2():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Index is less than min index of string (-11)."
+    assert lines[0] == "Index is less than min index of string (-12)."
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 

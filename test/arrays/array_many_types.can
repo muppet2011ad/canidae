@@ -1,0 +1,2 @@
+let x = [null, 0, 1, "", "Hello", [0, "F"], true];
+print x; // [null, 0, 1, "", "Hello", [0, "F"], true]

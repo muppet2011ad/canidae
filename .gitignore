@@ -4,3 +4,4 @@ program
 *.pyc
 programs
 test_report
+program.can
