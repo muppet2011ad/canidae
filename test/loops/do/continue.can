@@ -1,0 +1,15 @@
+let x = 0;
+do {
+    x++;
+    if x == 3 then continue;
+    print x;
+} while x < 5;
+do {
+    let y = 5;
+    do {
+        y++;
+        if y == 3 then continue; // Verifies continue skips the innermost, not outermost loop
+    } while y < 5;
+    x++;
+} while x < 10;
+print x;
