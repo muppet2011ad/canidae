@@ -12,6 +12,7 @@
 
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
+    vm->frame_count = 0;
 }
 
 static void runtime_error(VM *vm, const char *format, ...) {
@@ -21,8 +22,10 @@ static void runtime_error(VM *vm, const char *format, ...) {
     va_end(args);
     fputs("\n", stderr);
 
-    size_t instruction = vm->ip - vm->s->bytecode - 1;
-    uint32_t line = vm->s->lines[instruction];
+    call_frame *frame = &vm->frames[vm->frame_count - 1];
+    size_t instruction = frame->ip - frame->function->seg.bytecode - 1;
+    uint32_t line = frame->function->seg.lines[instruction];
+
     fprintf(stderr, "[line %u] in script\n", line);
     reset_stack(vm);
 }
@@ -183,12 +186,13 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
 }
 
 static interpret_result run(VM *vm) {
-    #define READ_BYTE() (*vm->ip++)
-    #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
+    call_frame *frame = &vm->frames[vm->frame_count - 1];
+    #define READ_BYTE() (*frame->ip++)
+    #define READ_CONSTANT() (frame->function->seg.constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
     #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
-    #define READ_CONSTANT_LONG() (vm->s->constants.values[READ_UINT24()])
+    #define READ_CONSTANT_LONG() (frame->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \
         do { \
@@ -246,7 +250,7 @@ static interpret_result run(VM *vm) {
                 printf("]");
             }
             printf("\n");
-            dissassemble_instruction(vm->s, (size_t) (vm->ip - vm->s->bytecode));
+            dissassemble_instruction(&frame->function->seg, (size_t) (frame->ip - frame->function->seg.bytecode));
         #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN:
@@ -393,12 +397,12 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_LOCAL: {
                 uint32_t arg = READ_UINT24();
-                push(vm, vm->stack[arg]);
+                push(vm, frame->slots[arg]);
                 break;
             }
             case OP_SET_LOCAL: {
                 uint32_t arg = READ_UINT24();
-                vm->stack[arg] = peek(vm, 0);
+                frame->slots[arg] = peek(vm, 0);
                 break;
             }
             case OP_CONSTANT_LONG: {
@@ -408,22 +412,22 @@ static interpret_result run(VM *vm) {
             }
             case OP_JUMP_IF_FALSE: {
                 uint64_t offset = READ_UINT40();
-                if (is_falsey(peek(vm, 0))) vm->ip += offset;
+                if (is_falsey(peek(vm, 0))) frame->ip += offset;
                 break;
             }
             case OP_JUMP_IF_TRUE: {
                 uint64_t offset = READ_UINT40();
-                if (!is_falsey(peek(vm, 0))) vm->ip += offset;
+                if (!is_falsey(peek(vm, 0))) frame->ip += offset;
                 break;
             }
             case OP_JUMP: {
                 uint64_t offset = READ_UINT40();
-                vm->ip += offset;
+                frame->ip += offset;
                 break;
             }
             case OP_LOOP: {
                 uint64_t offset = READ_UINT40();
-                vm->ip -= offset;
+                frame->ip -= offset;
                 break;
             }
         }
@@ -441,21 +445,14 @@ static interpret_result run(VM *vm) {
 }
 
 interpret_result interpret(VM *vm, const char *source) {
-    segment seg;
-    init_segment(&seg);
+    object_function *function = compile(source, vm);
+    if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
-    if (!compile(source, &seg, vm)) {
-        destroy_segment(&seg);
-        return INTERPRET_COMPILE_ERROR;
-    }
+    push(vm, OBJ_VAL(function));
+    call_frame *frame = &vm->frames[vm->frame_count++];
+    frame->function = function;
+    frame->ip = function->seg.bytecode;
+    frame->slots = vm->stack;
 
-    vm->s = &seg;
-    vm->ip = vm->s->bytecode;
-
-    interpret_result result = run(vm);
-
-    destroy_segment(&seg);
-    
-    return result;
-    //return run(vm);
+    return run(vm);
 }

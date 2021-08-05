@@ -28,12 +28,12 @@ struct object {
     struct object *next;
 };
 
-typedef struct {
+struct object_function {
     object obj;
     uint16_t arity;
     segment seg;
     object_string *name;
-} object_function;
+};
 
 struct object_string {
     object obj;

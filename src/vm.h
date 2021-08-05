@@ -6,10 +6,17 @@
 #include "hashmap.h"
 
 #define STACK_INITIAL 256
+#define FRAMES_MAX 1024
 
 typedef struct {
-    segment *s;
+    object_function *function;
     uint8_t *ip;
+    value *slots;
+} call_frame;
+
+typedef struct {
+    call_frame frames[FRAMES_MAX];
+    uint16_t frame_count;
     value *stack;
     size_t stack_len;
     size_t stack_capacity;
