@@ -608,8 +608,8 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
             if (function_compiler.function->arity == 0) {
                 error_at_current(p, "Can't have more than 255 parameters.");
             }
-            uint32_t constant = parse_variable(p, c, vm, "Expect parameter name.");
-            define_variable(p, c, constant);
+            uint32_t constant = parse_variable(p, &function_compiler, vm, "Expect parameter name.");
+            define_variable(p, &function_compiler, constant);
         } while (match(p, TOKEN_COMMA));
     }
     consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
