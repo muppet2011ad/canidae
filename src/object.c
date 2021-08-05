@@ -16,6 +16,14 @@ static object *allocate_object(VM* vm, size_t size, object_type type) {
     return obj;
 }
 
+object_function *new_function(VM *vm) {
+    object_function *f = ALLOCATE_OBJ(vm, object_function, OBJ_FUNCTION);
+    f->arity = 0;
+    f->name = NULL;
+    init_segment(&f->seg);
+    return f;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -54,6 +62,10 @@ object_string *copy_string(VM *vm, const char *chars, size_t length) {
     memcpy(new_string, chars, length);
     new_string[length] = '\0';
     return allocate_string(vm, new_string, length, hash);
+}
+
+static void print_function(object_function *f) {
+    printf("<function %s>", f->name->chars);
 }
 
 object_array *allocate_array(VM *vm, value *values, size_t length) {
@@ -127,5 +139,9 @@ void print_object(value v) {
                 print_value(array->arr.values[array->arr.len-1]);
             }
             printf("]");
+            break;
+        case OBJ_FUNCTION:
+            print_function(AS_FUNCTION(v));
+            break;
     }
 }

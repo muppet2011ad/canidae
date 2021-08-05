@@ -32,6 +32,12 @@ static void free_object(object *obj) {
             FREE(object_array, obj);
             break;
         }
+        case OBJ_FUNCTION: {
+            object_function *f = (object_function*)obj;
+            destroy_segment(&f->seg);
+            FREE(object_function, obj);
+            break;
+        }
     }
 }
 
