@@ -96,6 +96,7 @@ static void add_continue(compiler *c, size_t cont_addr);
 static void free_loop(loop l);
 static void add_local(parser *p, compiler *c, token name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
+static uint8_t argument_list(parser *p, compiler *c, VM *vm);
 
 static void init_compiler(parser *p, compiler *c, VM *vm, function_type type) {
     c->local_count = 0;
@@ -229,6 +230,7 @@ static void emit_loop(parser *p, compiler *c, size_t loop_start) {
 }
 
 static void emit_return(parser *p, compiler *c) {
+    emit_byte(p, c, OP_NULL);
     emit_byte(p, c, OP_RETURN);
 }
 
@@ -338,7 +340,8 @@ static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 }
 
 static void call(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
-
+    uint8_t argc = argument_list(p, c, vm);
+    emit_2_bytes(p, c, OP_CALL, argc);
 }
 
 static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
@@ -635,6 +638,19 @@ static void define_variable(parser *p, compiler *c, uint32_t global) {
     write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
 }
 
+static uint8_t argument_list(parser *p, compiler *c, VM *vm) {
+    uint8_t argc = 0;
+    if (!check(p, TOKEN_RIGHT_PAREN)) {
+        do {
+            if (argc == 255) error(p, "Can't have more than 255 arguments.");
+            expression(p, c, vm);
+            argc++;
+        } while (match(p, TOKEN_COMMA));
+    }
+    consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after arguments.");
+    return argc;
+}
+
 static void and_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     size_t end_jump = emit_jump(p, c, OP_JUMP_IF_FALSE);
     emit_byte(p, c, OP_POP);
@@ -716,6 +732,20 @@ static void print_statement(parser *p, compiler *c, VM *vm) {
     emit_byte(p, c, OP_PRINT);
 }
 
+static void return_statement(parser *p, compiler *c, VM *vm) {
+    if (c->type == TYPE_SCRIPT) {
+        error(p, "Can't return outside of a function.");
+    }
+    if (match(p, TOKEN_SEMICOLON)) {
+        emit_return(p, c);
+    }
+    else {
+        expression(p, c, vm);
+        consume(p, TOKEN_SEMICOLON, "Expect ';' after return value.");
+        emit_byte(p, c, OP_RETURN);
+    }
+}
+
 static void synchronise(parser *p) {
     p->panic = 0;
 
@@ -773,6 +803,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
     else if (match(p, TOKEN_IF)) {
         if_statement(p, c, vm);
     } 
+    else if (match(p, TOKEN_RETURN)) {
+        return_statement(p, c, vm);
+    }
     else if (match(p, TOKEN_CONTINUE)) {
         continue_statement(p, c, vm);
     }

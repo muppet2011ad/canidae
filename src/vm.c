@@ -22,11 +22,19 @@ static void runtime_error(VM *vm, const char *format, ...) {
     va_end(args);
     fputs("\n", stderr);
 
-    call_frame *frame = &vm->frames[vm->frame_count - 1];
-    size_t instruction = frame->ip - frame->function->seg.bytecode - 1;
-    uint32_t line = frame->function->seg.lines[instruction];
+    for (int32_t i = vm->frame_count - 1; i >= 0; i--) {
+        call_frame *frame = &vm->frames[i];
+        object_function *function = frame->function;
+        size_t instruction = frame->ip - function->seg.bytecode - 1;
+        fprintf(stderr, "[line %u] in ", function->seg.lines[instruction]);
+        if (function->name == NULL) {
+            fprintf(stderr, "script\n");
+        }
+        else {
+            fprintf(stderr, "%s()n", function->name->chars);
+        }
+    }
 
-    fprintf(stderr, "[line %u] in script\n", line);
     reset_stack(vm);
 }
 
@@ -77,6 +85,32 @@ value popn(VM *vm, size_t n) {
 
 static value peek(VM *vm, int distance) {
     return vm->stack_ptr[-1 - distance];
+}
+
+static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
+    if (argc != function->arity) {
+        runtime_error(vm, "Function '%s' expects %u arguments (got %u).", function->name->chars, function->arity, argc);
+        return 0;
+    }
+    if (vm->frame_count == FRAMES_MAX) {
+        runtime_error(vm, "Exceeded max call depth (%u).", FRAMES_MAX);
+        return 0;
+    }
+    call_frame *frame = &vm->frames[vm->frame_count++];
+    frame->function = function;
+    frame->ip = function->seg.bytecode;
+    frame->slots = vm->stack_ptr - argc - 1;
+    return 1;
+}
+
+static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
+    if (IS_OBJ(callee)) {
+        if (IS_FUNCTION(callee)) {
+            return call(vm, AS_FUNCTION(callee), argc);
+        }
+    }
+    runtime_error(vm, "Can only call functions.");
+    return 0;
 }
 
 static uint8_t is_falsey(value v) {
@@ -253,10 +287,18 @@ static interpret_result run(VM *vm) {
             dissassemble_instruction(&frame->function->seg, (size_t) (frame->ip - frame->function->seg.bytecode));
         #endif
         switch (instruction = READ_BYTE()) {
-            case OP_RETURN:
-                //print_value(pop(vm));
-                //printf("\n");
-                return INTERPRET_OK;
+            case OP_RETURN:{
+                value result = pop(vm);
+                vm->frame_count--;
+                if (vm->frame_count == 0) {
+                    pop(vm);
+                    return INTERPRET_OK;
+                }
+                vm->stack_ptr = frame->slots;
+                push(vm, result);
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
             case OP_NEGATE:
                 if (!IS_NUMBER(peek(vm, 0))) {
                     runtime_error(vm, "Operand must be a number.");
@@ -370,6 +412,14 @@ static interpret_result run(VM *vm) {
                 popn(vm, n);
                 break;
             }
+            case OP_CALL: {
+                uint8_t argc = READ_BYTE();
+                if (!call_value(vm, peek(vm, argc), argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
             case OP_DEFINE_GLOBAL: {
                 object_string *name = READ_STRING();
                 hashmap_set(&vm->globals, name, peek(vm, 0));
@@ -449,10 +499,7 @@ interpret_result interpret(VM *vm, const char *source) {
     if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
     push(vm, OBJ_VAL(function));
-    call_frame *frame = &vm->frames[vm->frame_count++];
-    frame->function = function;
-    frame->ip = function->seg.bytecode;
-    frame->slots = vm->stack;
+    call(vm, function, 0);
 
     return run(vm);
 }
