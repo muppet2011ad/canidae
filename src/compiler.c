@@ -41,7 +41,7 @@ typedef struct {
     size_t continue_capacity;
 } loop;
 
-typedef struct {
+typedef struct compiler {
     local *locals;
     long local_count;
     uint32_t local_capacity;
@@ -95,8 +95,9 @@ static void add_break(compiler *c, size_t break_addr);
 static void add_continue(compiler *c, size_t cont_addr);
 static void free_loop(loop l);
 static void add_local(parser *p, compiler *c, token name);
+static void define_variable(parser *p, compiler *c, uint32_t global);
 
-static void init_compiler(compiler *c, VM *vm, function_type type) {
+static void init_compiler(parser *p, compiler *c, VM *vm, function_type type) {
     c->local_count = 0;
     c->local_capacity = 0;
     c->scope_depth = 0;
@@ -112,6 +113,9 @@ static void init_compiler(compiler *c, VM *vm, function_type type) {
     t.start = "";
     add_local(NULL, c, t);
     c->locals[c->local_count].depth = 0;
+        if (type != TYPE_SCRIPT) {
+        c->function->name = copy_string(vm, p->prev.start, p->prev.length);
+    }
 }
 
 static void destroy_compiler(compiler *c, VM *vm) {
@@ -120,7 +124,7 @@ static void destroy_compiler(compiler *c, VM *vm) {
         free_loop(c->loops[i]);
     }
     FREE_ARRAY(loop, c->loops, c->loop_capacity);
-    init_compiler(c, vm, 0);
+    init_compiler(NULL, c, vm, TYPE_SCRIPT);
 }
 
 static segment *current_seg(compiler *c) {
@@ -590,6 +594,35 @@ static void block(parser *p, compiler *c, VM *vm) {
     consume(p, TOKEN_RIGHT_BRACE, "Expect '}' after block.");
 }
 
+static void function(parser *p, compiler *c, VM *vm, function_type type) {
+    compiler function_compiler;
+    init_compiler(p, &function_compiler, vm, type);
+    begin_scope(&function_compiler);
+    consume(p, TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+    if (!check(p, TOKEN_RIGHT_PAREN)) {
+        do {
+            function_compiler.function->arity++;
+            if (function_compiler.function->arity == 0) {
+                error_at_current(p, "Can't have more than 65535 parameters.");
+            }
+            uint32_t constant = parse_variable(p, c, vm, "Expect parameter name.");
+            define_variable(p, c, constant);
+        } while (match(p, TOKEN_COMMA));
+    }
+    consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
+    consume(p, TOKEN_LEFT_BRACE, "Expect '{' before function body.");
+    block(p, &function_compiler, vm);
+    object_function *function = end_compiler(p, &function_compiler);
+    emit_2_bytes(p, c, OP_CONSTANT, make_constant(p, c, OBJ_VAL(function)));
+}
+
+static void function_declaration(parser *p, compiler *c, VM *vm) {
+    uint32_t global = parse_variable(p, c, vm, "Expect function name.");
+    mark_initialised(c);
+    function(p, c, vm, TYPE_FUNCTION);
+    define_variable(p, c, global);
+}
+
 static void define_variable(parser *p, compiler *c, uint32_t global) {
     if (c->scope_depth > 0) {
         mark_initialised(c);
@@ -702,7 +735,10 @@ static void synchronise(parser *p) {
 }
 
 static void declaration(parser *p, compiler *c, VM *vm) {
-    if (match(p, TOKEN_LET)) {
+    if (match(p, TOKEN_FUNCTION)) {
+        function_declaration(p, c, vm);
+    }
+    else if (match(p, TOKEN_LET)) {
         var_declaration(p, c, vm);
     }
     else {
@@ -962,6 +998,7 @@ static uint32_t parse_variable(parser *p, compiler *c, VM *vm, const char *error
 }
 
 static void mark_initialised(compiler *c) {
+    if (c->scope_depth == 0) return;
     c->locals[c->local_count - 1].depth = c->scope_depth;
 }
 
@@ -975,7 +1012,7 @@ object_function *compile(const char* source, VM *vm) {
     compiler c;
     init_scanner(&s, source);
     init_parser(&p, &s);
-    init_compiler(&c, vm, TYPE_SCRIPT);
+    init_compiler(&p, &c, vm, TYPE_SCRIPT);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {
         declaration(&p, &c, vm);
