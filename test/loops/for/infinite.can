@@ -1,0 +1,12 @@
+{
+    for let x = 0; ; x++ do {
+        if x == 5 then break;
+        print x;
+    }
+    let x = 0;
+    for ;; do {
+        x++;
+        if x == 5 then break;
+        print x;
+    }
+}

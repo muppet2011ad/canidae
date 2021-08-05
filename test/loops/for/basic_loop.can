@@ -1,0 +1,12 @@
+{
+    for let x = 0; x < 5; x++ do {
+        print x;
+    }
+    for let x = 0; x < 5; do {
+        x++;
+        print x;
+    }
+    let x = 0;
+    for ; x < 5; x++ do print x;
+    print x;
+}

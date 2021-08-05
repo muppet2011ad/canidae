@@ -81,3 +81,44 @@ def test_loop_do_infinite():
     assert len(lines) == 2
     assert lines[0] == "1000"
     assert lines[1] == ""
+
+def test_loop_for_basic_loop():
+    completed = subprocess.run(["bin/canidae",  "test/loops/for/basic_loop.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 17
+    assert lines == ["0", "1", "2", "3", "4", "1", "2", "3", "4", "5", "0", "1", "2", "3", "4", "5", ""]
+
+def test_loop_for_break():
+    completed = subprocess.run(["bin/canidae",  "test/loops/for/break.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 5
+    assert lines[0] == "0"
+    assert lines[1] == "1"
+    assert lines[2] == "2"
+    assert lines[3] == "5"
+    assert lines[4] == ""
+
+def test_loop_for_continue():
+    completed = subprocess.run(["bin/canidae",  "test/loops/for/continue.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 10
+    assert lines == ["0", "1", "2", "4", "0", "1", "2", "3", "4", ""]
+
+def test_loop_scope_correct():
+    completed = subprocess.run(["bin/canidae",  "test/loops/for/scope_correct.can"], text=True, capture_output=True)
+    assert completed.returncode == 70
+    lines = completed.stderr.split("\n")
+    assert len(lines) == 3
+    assert lines[0].startswith("Undefined variable")
+    assert lines[1].startswith("[line 3]")
+    assert lines[2] == ""
+
+def test_loop_for_infinite():
+    completed = subprocess.run(["bin/canidae",  "test/loops/for/infinite.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 10
+    assert lines == ["0", "1", "2", "3", "4", "1", "2", "3", "4", ""]

@@ -1,0 +1,13 @@
+{
+    for let x = 0; x < 5; x++ do {
+        if x == 3 then continue; // Should jump to increment clause
+        print x;
+    }
+    let x = 0;
+    for ; x < 5; x++ do {
+        for let y = 0; y < 5; y++ do {
+            if y == 3 then continue; // Ensures innermost loop is continued - x should still be printed 5 times
+        }
+        print x;
+    }
+}
