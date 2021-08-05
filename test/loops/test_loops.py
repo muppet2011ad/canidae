@@ -36,3 +36,11 @@ def test_loop_while_continue():
     assert lines[1] == "5"
     assert lines[2] == "5"
     assert lines[3] == ""
+
+def test_loop_while_infinite():
+    completed = subprocess.run(["bin/canidae",  "test/loops/while/infinite.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "1000"
+    assert lines[1] == ""
