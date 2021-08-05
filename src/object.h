@@ -30,7 +30,7 @@ struct object {
 
 struct object_function {
     object obj;
-    uint16_t arity;
+    uint8_t arity;
     segment seg;
     object_string *name;
 };

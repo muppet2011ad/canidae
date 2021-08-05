@@ -335,6 +335,9 @@ static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         case TOKEN_LESS_EQUAL: emit_byte(p, c, OP_LESS_EQUAL); break;
         default: return;
     }
+}
+
+static void call(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 
 }
 
@@ -603,7 +606,7 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
         do {
             function_compiler.function->arity++;
             if (function_compiler.function->arity == 0) {
-                error_at_current(p, "Can't have more than 65535 parameters.");
+                error_at_current(p, "Can't have more than 255 parameters.");
             }
             uint32_t constant = parse_variable(p, c, vm, "Expect parameter name.");
             define_variable(p, c, constant);
@@ -782,7 +785,7 @@ static void statement(parser *p, compiler *c, VM *vm) {
 }
 
 parse_rule rules[] = {
-    [TOKEN_LEFT_PAREN] = {grouping, NULL, PREC_NONE},
+    [TOKEN_LEFT_PAREN] = {grouping, call, PREC_CALL},
     [TOKEN_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
     [TOKEN_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
     [TOKEN_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
