@@ -65,7 +65,12 @@ object_string *copy_string(VM *vm, const char *chars, size_t length) {
 }
 
 static void print_function(object_function *f) {
-    printf("<function %s>", f->name->chars);
+    if (f->name == NULL) {
+        printf("<script>");
+    }
+    else {
+        printf("<function %s>", f->name->chars);
+    }
 }
 
 object_array *allocate_array(VM *vm, value *values, size_t length) {

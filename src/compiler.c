@@ -24,6 +24,11 @@ typedef struct {
     long depth;
 } local;
 
+typedef enum {
+    TYPE_FUNCTION,
+    TYPE_SCRIPT,
+} function_type;
+
 typedef struct {
     uint8_t sentinel;
     size_t continue_addr;
@@ -44,6 +49,8 @@ typedef struct {
     loop *loops;
     long num_loops;
     size_t loop_capacity;
+    object_function *function;
+    function_type type;
 } compiler;
 
 typedef enum {
@@ -87,10 +94,9 @@ static uint8_t is_in_loop(compiler *c);
 static void add_break(compiler *c, size_t break_addr);
 static void add_continue(compiler *c, size_t cont_addr);
 static void free_loop(loop l);
+static void add_local(parser *p, compiler *c, token name);
 
-segment *compiling_segment;
-
-static void init_compiler(compiler *c) {
+static void init_compiler(compiler *c, VM *vm, function_type type) {
     c->local_count = 0;
     c->local_capacity = 0;
     c->scope_depth = 0;
@@ -98,19 +104,27 @@ static void init_compiler(compiler *c) {
     c->num_loops = 0;
     c->locals = NULL;
     c->loops = NULL;
+    c->function = NULL;
+    c->type = type;
+    c->function = new_function(vm);
+    token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
+    t.length = 0;
+    t.start = "";
+    add_local(NULL, c, t);
+    c->locals[c->local_count].depth = 0;
 }
 
-static void destroy_compiler(compiler *c) {
+static void destroy_compiler(compiler *c, VM *vm) {
     FREE_ARRAY(local, c->locals, c->local_capacity);
     for (size_t i = 0; i < c->num_loops; i++) {
         free_loop(c->loops[i]);
     }
     FREE_ARRAY(loop, c->loops, c->loop_capacity);
-    init_compiler(c);
+    init_compiler(c, vm, 0);
 }
 
-static segment *current_seg() {
-    return compiling_segment;
+static segment *current_seg(compiler *c) {
+    return &c->function->seg;
 }
 
 static void init_parser(parser *p, scanner *s) {
@@ -145,8 +159,8 @@ static void error_at_current(parser *p, const char *message) {
     error_at(p, &p->current, message);
 }
 
-static uint32_t make_constant(parser *p, value val) {
-    size_t constant = add_constant(current_seg(), val);
+static uint32_t make_constant(parser *p, compiler *c, value val) {
+    size_t constant = add_constant(current_seg(c), val);
     if (constant > UINT24_MAX) {
         error(p, "Too many constants in one segment.");
         return 0;
@@ -182,69 +196,69 @@ static uint8_t match(parser *p, token_type type) {
     return 1;
 }
 
-static void emit_byte(parser *p, uint8_t byte) {
-    write_to_segment(current_seg(), byte, p->prev.line);
+static void emit_byte(parser *p, compiler *c, uint8_t byte) {
+    write_to_segment(current_seg(c), byte, p->prev.line);
 }
 
-static void emit_2_bytes(parser *p, uint8_t x, uint8_t y) {
-    emit_byte(p, x);
-    emit_byte(p, y);
+static void emit_2_bytes(parser *p, compiler *c, uint8_t x, uint8_t y) {
+    emit_byte(p, c, x);
+    emit_byte(p, c, y);
 }
 
-static void emit_bytes(parser *p, uint8_t *bytes, size_t n) {
-    write_n_bytes_to_segment(current_seg(), bytes, n, p->prev.line);
+static void emit_bytes(parser *p, compiler *c, uint8_t *bytes, size_t n) {
+    write_n_bytes_to_segment(current_seg(c), bytes, n, p->prev.line);
 }
 
-static size_t emit_jump(parser *p, uint8_t instruction) {
+static size_t emit_jump(parser *p, compiler *c, uint8_t instruction) {
     uint8_t bytes[6] = {instruction, 0xff, 0xff, 0xff, 0xff, 0xff};
-    emit_bytes(p, bytes, 6);
-    return current_seg()->len - JUMP_OFFSET_LEN;
+    emit_bytes(p, c, bytes, 6);
+    return current_seg(c)->len - JUMP_OFFSET_LEN;
 }
 
-static void emit_loop(parser *p, size_t loop_start) {
-    size_t offset = current_seg()->len - loop_start + JUMP_OFFSET_LEN + 1;
+static void emit_loop(parser *p, compiler *c, size_t loop_start) {
+    size_t offset = current_seg(c)->len - loop_start + JUMP_OFFSET_LEN + 1;
     if (offset > UINT40_MAX) {
         error(p, "Too much code to jump over.");
     }
     uint8_t bytes[6] = {OP_LOOP, (uint8_t) (offset >> 32), (uint8_t) (offset >> 24), (uint8_t) (offset >> 16), (uint8_t) (offset >> 8), (uint8_t) offset};
-    emit_bytes(p, bytes, 6);
+    emit_bytes(p, c, bytes, 6);
 }
 
-static void emit_return(parser *p) {
-    emit_byte(p, OP_RETURN);
+static void emit_return(parser *p, compiler *c) {
+    emit_byte(p, c, OP_RETURN);
 }
 
-static void emit_constant(parser *p, value v) {
-    uint32_t result = write_constant_to_segment(current_seg(), v, p->prev.line);
+static void emit_constant(parser *p, compiler *c, value v) {
+    uint32_t result = write_constant_to_segment(current_seg(c), v, p->prev.line);
     if (result == UINT32_MAX) {
         error(p, "Too many constants in one chunk.");
     }
 }
 
-static void patch_jump(parser *p, size_t offset) {
-    long jump = current_seg()->len - offset - JUMP_OFFSET_LEN;
+static void patch_jump(parser *p, compiler *c, size_t offset) {
+    long jump = current_seg(c)->len - offset - JUMP_OFFSET_LEN;
     if (jump > UINT40_MAX) {
         error(p, "Too much code to jump over.");
     }
 
-    current_seg()->bytecode[offset] = (uint8_t) (jump >> 32);
-    current_seg()->bytecode[offset+1] = (uint8_t) (jump >> 24);
-    current_seg()->bytecode[offset+2] = (uint8_t) (jump >> 16);
-    current_seg()->bytecode[offset+3] = (uint8_t) (jump >> 8);
-    current_seg()->bytecode[offset+4] = (uint8_t) jump;
+    current_seg(c)->bytecode[offset] = (uint8_t) (jump >> 32);
+    current_seg(c)->bytecode[offset+1] = (uint8_t) (jump >> 24);
+    current_seg(c)->bytecode[offset+2] = (uint8_t) (jump >> 16);
+    current_seg(c)->bytecode[offset+3] = (uint8_t) (jump >> 8);
+    current_seg(c)->bytecode[offset+4] = (uint8_t) jump;
 }
 
 static void patch_breaks(parser *p, compiler *c) {
     loop *l = peek_loop_stack(c);
     for (size_t i = 0; i < l->num_breaks; i++) {
-        patch_jump(p, l->breaks[i]);
+        patch_jump(p, c, l->breaks[i]);
     }
 }
 
 static void patch_continues(parser *p, compiler *c) {
     loop *l = peek_loop_stack(c);
     for (size_t i = 0; i < l->num_continues; i++) {
-        patch_jump(p, l->continues[i]);
+        patch_jump(p, c, l->continues[i]);
     }
 }
 
@@ -258,21 +272,23 @@ static void exit_loop_scope(parser *p, compiler *c) {
     }
     for (; to_pop > 0; to_pop-=255) {
         if (to_pop >= 255) {
-            emit_2_bytes(p, OP_POPN, 255);
+            emit_2_bytes(p, c, OP_POPN, 255);
         }
         else {
-            emit_2_bytes(p, OP_POPN, to_pop);
+            emit_2_bytes(p, c, OP_POPN, to_pop);
         }
     }
 }
 
-static void end_compiler(parser *p) {
-    emit_return(p);
+static object_function *end_compiler(parser *p, compiler *c) {
+    emit_return(p, c);
+    object_function *f = c->function;
     #ifdef DEBUG_PRINT_CODE
         if (!p->had_error) {
-            disassemble_segment(current_seg(), "code");
+            disassemble_segment(current_seg(c), f->name != NULL ? f->name->chars : "<script>");
         }
     #endif
+    return f;
 }
 
 static void begin_scope(compiler *c) {
@@ -289,10 +305,10 @@ static void end_scope(parser *p, compiler *c) {
     }
     for (; to_pop > 0; to_pop-=255) {
         if (to_pop >= 255) {
-            emit_2_bytes(p, OP_POPN, 255);
+            emit_2_bytes(p, c, OP_POPN, 255);
         }
         else {
-            emit_2_bytes(p, OP_POPN, to_pop);
+            emit_2_bytes(p, c, OP_POPN, to_pop);
         }
     }
 }
@@ -302,17 +318,17 @@ static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     parse_rule *rule = get_rule(operator);
     parse_precedence(p, c, vm, rule->prec + 1);
     switch (operator) {
-        case TOKEN_PLUS: emit_byte(p, OP_ADD); break;
-        case TOKEN_MINUS: emit_byte(p, OP_SUBTRACT); break;
-        case TOKEN_STAR: emit_byte(p, OP_MULTIPLY); break;
-        case TOKEN_SLASH: emit_byte(p, OP_DIVIDE); break;
-        case TOKEN_CARET: emit_byte(p, OP_POWER); break;
-        case TOKEN_BANG_EQUAL: emit_2_bytes(p, OP_EQUAL, OP_NOT); break;
-        case TOKEN_EQUAL_EQUAL: emit_byte(p, OP_EQUAL); break;
-        case TOKEN_GREATER: emit_byte(p, OP_GREATER); break;
-        case TOKEN_GREATER_EQUAL: emit_byte(p, OP_GREATER_EQUAL); break;
-        case TOKEN_LESS: emit_byte(p, OP_LESS); break;
-        case TOKEN_LESS_EQUAL: emit_byte(p, OP_LESS_EQUAL); break;
+        case TOKEN_PLUS: emit_byte(p, c, OP_ADD); break;
+        case TOKEN_MINUS: emit_byte(p, c, OP_SUBTRACT); break;
+        case TOKEN_STAR: emit_byte(p, c, OP_MULTIPLY); break;
+        case TOKEN_SLASH: emit_byte(p, c, OP_DIVIDE); break;
+        case TOKEN_CARET: emit_byte(p, c, OP_POWER); break;
+        case TOKEN_BANG_EQUAL: emit_2_bytes(p, c, OP_EQUAL, OP_NOT); break;
+        case TOKEN_EQUAL_EQUAL: emit_byte(p, c, OP_EQUAL); break;
+        case TOKEN_GREATER: emit_byte(p, c, OP_GREATER); break;
+        case TOKEN_GREATER_EQUAL: emit_byte(p, c, OP_GREATER_EQUAL); break;
+        case TOKEN_LESS: emit_byte(p, c, OP_LESS); break;
+        case TOKEN_LESS_EQUAL: emit_byte(p, c, OP_LESS_EQUAL); break;
         default: return;
     }
 
@@ -320,42 +336,42 @@ static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 
 static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     switch (p->prev.type) {
-        case TOKEN_FALSE: emit_byte(p, OP_FALSE); break;
-        case TOKEN_NULL: emit_byte(p, OP_NULL); break;
-        case TOKEN_TRUE: emit_byte(p, OP_TRUE); break;
+        case TOKEN_FALSE: emit_byte(p, c, OP_FALSE); break;
+        case TOKEN_NULL: emit_byte(p, c, OP_NULL); break;
+        case TOKEN_TRUE: emit_byte(p, c, OP_TRUE); break;
         default: return;
     }
 }
 
 static void number(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     double num = strtod(p->prev.start, NULL);
-    emit_constant(p, NUMBER_VAL(num));
+    emit_constant(p, c, NUMBER_VAL(num));
 }
 
 static void string(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
-    emit_constant(p, OBJ_VAL(copy_string(vm, p->prev.start + 1, p->prev.length -2)));
+    emit_constant(p, c, OBJ_VAL(copy_string(vm, p->prev.start + 1, p->prev.length -2)));
 }
 
 static void assign_with_op(parser *p, compiler *c, VM *vm, uint8_t var_or_arr, uint32_t arg, opcode get_op, opcode set_op, opcode op, uint8_t can_eval_expr) {
     if (var_or_arr) {
-        emit_byte(p, get_op);
+        emit_byte(p, c, get_op);
     }
     else {
         uint8_t get_bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(), get_bytes, 4, p->prev.line);
+        write_n_bytes_to_segment(current_seg(c), get_bytes, 4, p->prev.line);
     }
     if (can_eval_expr) {
         expression(p, c, vm);
     } else {
-        emit_constant(p, NUMBER_VAL(1));
+        emit_constant(p, c, NUMBER_VAL(1));
     }
-    emit_byte(p, op);
+    emit_byte(p, c, op);
     if (var_or_arr) {
-        emit_byte(p, set_op);
+        emit_byte(p, c, set_op);
     }
     else {
         uint8_t set_bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(), set_bytes, 4, p->prev.line);
+        write_n_bytes_to_segment(current_seg(c), set_bytes, 4, p->prev.line);
     }
 }
 
@@ -363,11 +379,11 @@ static uint8_t handle_assignment(parser *p, compiler *c, VM *vm, uint8_t var_or_
     if (match(p, TOKEN_EQUAL)) {
         expression(p, c, vm);
         if (var_or_arr) {
-            emit_byte(p, set_op);
+            emit_byte(p, c, set_op);
         } 
         else {
             uint8_t bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
-            write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+            write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
         }
         return 1;
     }
@@ -421,7 +437,7 @@ static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t c
     }
     if (!assigned) {
         uint8_t bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+        write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
     }
 }
 
@@ -433,8 +449,8 @@ static void unary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     token_type operator = p->prev.type;
     parse_precedence(p, c, vm, PREC_UNARY);
     switch (operator) {
-        case TOKEN_MINUS: emit_byte(p, OP_NEGATE); break;
-        case TOKEN_BANG: emit_byte(p, OP_NOT); break;
+        case TOKEN_MINUS: emit_byte(p, c, OP_NEGATE); break;
+        case TOKEN_BANG: emit_byte(p, c, OP_NOT); break;
         default: return;
     }
 }
@@ -451,56 +467,56 @@ static void expression(parser *p, compiler *c, VM *vm) {
 static void expression_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after expression.");
-    emit_byte(p, OP_POP);
+    emit_byte(p, c, OP_POP);
 }
 
 static void if_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm);
     consume(p, TOKEN_THEN, "Expect 'then' after condition.");
-    size_t then_jump = emit_jump(p, OP_JUMP_IF_FALSE);
-    emit_byte(p, OP_POP);
+    size_t then_jump = emit_jump(p, c, OP_JUMP_IF_FALSE);
+    emit_byte(p, c, OP_POP);
     statement(p, c, vm);
 
-    size_t else_jump = emit_jump(p, OP_JUMP);
+    size_t else_jump = emit_jump(p, c, OP_JUMP);
 
-    patch_jump(p, then_jump);
-    emit_byte(p, OP_POP);
+    patch_jump(p, c, then_jump);
+    emit_byte(p, c, OP_POP);
 
     if (match(p, TOKEN_ELSE)) {
         statement(p, c, vm);
     }
-    patch_jump(p, else_jump);
+    patch_jump(p, c, else_jump);
 }
 
 static void while_statement(parser *p, compiler *c, VM *vm) {
-    size_t loop_start = current_seg()->len;
+    size_t loop_start = current_seg(c)->len;
     push_loop_stack(c, loop_start, c->scope_depth, 0);
     expression(p, c, vm);
     consume(p, TOKEN_DO, "Expect 'do' after loop condition.");
 
-    size_t skip_loop_jump = emit_jump(p, OP_JUMP_IF_FALSE);
-    emit_byte(p, OP_POP);
+    size_t skip_loop_jump = emit_jump(p, c, OP_JUMP_IF_FALSE);
+    emit_byte(p, c, OP_POP);
     statement(p, c, vm);
-    emit_loop(p, loop_start);
-    patch_jump(p, skip_loop_jump);
-    emit_byte(p, OP_POP);
+    emit_loop(p, c, loop_start);
+    patch_jump(p, c, skip_loop_jump);
+    emit_byte(p, c, OP_POP);
     patch_breaks(p, c);
     pop_loop_stack(c);
 }
 
 static void do_statement(parser *p, compiler *c, VM *vm) {
-    size_t loop_start = current_seg()->len;
+    size_t loop_start = current_seg(c)->len;
     push_loop_stack(c, SIZE_MAX, c->scope_depth, 0);
     statement(p, c, vm);
     consume(p, TOKEN_WHILE, "Expect 'while' after do loop body.");
     patch_continues(p, c);
     expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after loop condition.");
-    size_t exit_jump = emit_jump(p, OP_JUMP_IF_FALSE);
-    emit_byte(p, OP_POP);
-    emit_loop(p, loop_start);
-    patch_jump(p, exit_jump);
-    emit_byte(p, OP_POP);
+    size_t exit_jump = emit_jump(p, c, OP_JUMP_IF_FALSE);
+    emit_byte(p, c, OP_POP);
+    emit_loop(p, c, loop_start);
+    patch_jump(p, c, exit_jump);
+    emit_byte(p, c, OP_POP);
     patch_breaks(p, c);
     pop_loop_stack(c);
 }
@@ -512,10 +528,10 @@ static void continue_statement(parser *p, compiler *c, VM *vm) {
     }
     exit_loop_scope(p, c);
     if (get_continue_addr(c) == SIZE_MAX) {
-        add_continue(c, emit_jump(p, OP_JUMP));
+        add_continue(c, emit_jump(p, c, OP_JUMP));
     }
     else {
-        emit_loop(p, get_continue_addr(c));
+        emit_loop(p, c, get_continue_addr(c));
     }
     consume(p, TOKEN_SEMICOLON, "Expected ';' at end of break statement.");
 }
@@ -526,7 +542,7 @@ static void break_statement(parser *p, compiler *c, VM *vm) {
         return;
     }
     exit_loop_scope(p, c);
-    add_break(c, emit_jump(p, OP_JUMP));
+    add_break(c, emit_jump(p, c, OP_JUMP));
     consume(p, TOKEN_SEMICOLON, "Expected ';' at end of break statement.");
 }
 
@@ -543,8 +559,8 @@ static void array_dec(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         }
     }
     consume(p, TOKEN_RIGHT_SQR, "Expect ']' after array.");
-    emit_constant(p, NUMBER_VAL((double) nmeb));
-    emit_byte(p, OP_MAKE_ARRAY);
+    emit_constant(p, c, NUMBER_VAL((double) nmeb));
+    emit_byte(p, c, OP_MAKE_ARRAY);
 }
 
 static void array_index(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
@@ -563,7 +579,7 @@ static void array_index(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         }
     } 
     if (!assigned) {
-        emit_byte(p, OP_ARRAY_GET);
+        emit_byte(p, c, OP_ARRAY_GET);
     }
 }
 
@@ -580,21 +596,21 @@ static void define_variable(parser *p, compiler *c, uint32_t global) {
         return;
     }
     uint8_t bytes[4] = {OP_DEFINE_GLOBAL, global >> 16, global >> 8, global};
-    write_n_bytes_to_segment(current_seg(), bytes, 4, p->prev.line);
+    write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
 }
 
 static void and_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
-    size_t end_jump = emit_jump(p, OP_JUMP_IF_FALSE);
-    emit_byte(p, OP_POP);
+    size_t end_jump = emit_jump(p, c, OP_JUMP_IF_FALSE);
+    emit_byte(p, c, OP_POP);
     parse_precedence(p, c, vm, PREC_AND);
-    patch_jump(p, end_jump);
+    patch_jump(p, c, end_jump);
 }
 
 static void or_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
-    size_t else_jump = emit_jump(p, OP_JUMP_IF_TRUE);
-    emit_byte(p, OP_POP);
+    size_t else_jump = emit_jump(p, c, OP_JUMP_IF_TRUE);
+    emit_byte(p, c, OP_POP);
     parse_precedence(p, c, vm, PREC_OR);
-    patch_jump(p, else_jump);
+    patch_jump(p, c, else_jump);
 }
 
 static void var_declaration(parser *p, compiler *c, VM *vm) {
@@ -603,7 +619,7 @@ static void var_declaration(parser *p, compiler *c, VM *vm) {
     if (match(p, TOKEN_EQUAL)) {
         expression(p, c, vm);
     } else {
-        emit_byte(p, OP_NULL);
+        emit_byte(p, c, OP_NULL);
     }
     if (match(p, TOKEN_LEFT_SQR)) {
         error(p, "Cannot declare array member as variable.");
@@ -624,33 +640,33 @@ static void for_statement(parser *p, compiler *c, VM *vm) {
         expression_statement(p, c, vm);
     }
 
-    size_t loop_start = current_seg()->len;
+    size_t loop_start = current_seg(c)->len;
     long exit_jump = -1;
     if (!match(p, TOKEN_SEMICOLON)) {
         expression(p, c, vm); // Evaluate condition
         consume(p, TOKEN_SEMICOLON, "Expect ';' after loop condition.");
-        exit_jump = emit_jump(p, OP_JUMP_IF_FALSE); // Emit jump to leave loop
-        emit_byte(p, OP_POP); // Pop result of condition expression
+        exit_jump = emit_jump(p, c, OP_JUMP_IF_FALSE); // Emit jump to leave loop
+        emit_byte(p, c, OP_POP); // Pop result of condition expression
     }
     
     if (!match(p, TOKEN_DO)) {
-        size_t body_jump = emit_jump(p, OP_JUMP);
-        size_t increment_start = current_seg()->len;
+        size_t body_jump = emit_jump(p, c, OP_JUMP);
+        size_t increment_start = current_seg(c)->len;
         expression(p, c, vm);
-        emit_byte(p, OP_POP);
+        emit_byte(p, c, OP_POP);
         consume(p, TOKEN_DO, "Expect 'do' after for clauses.");
-        emit_loop(p, loop_start);
+        emit_loop(p, c, loop_start);
         loop_start = increment_start;
-        patch_jump(p, body_jump);
+        patch_jump(p, c, body_jump);
     }
 
     push_loop_stack(c, loop_start, c->scope_depth, 0);
 
     statement(p, c, vm);
-    emit_loop(p, loop_start);
+    emit_loop(p, c, loop_start);
     if (exit_jump != -1) {
-        patch_jump(p, (size_t) exit_jump);
-        emit_byte(p, OP_POP);
+        patch_jump(p, c, (size_t) exit_jump);
+        emit_byte(p, c, OP_POP);
     }
     patch_breaks(p, c);
     pop_loop_stack(c);
@@ -661,7 +677,7 @@ static void for_statement(parser *p, compiler *c, VM *vm) {
 static void print_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after value.");
-    emit_byte(p, OP_PRINT);
+    emit_byte(p, c, OP_PRINT);
 }
 
 static void synchronise(parser *p) {
@@ -800,7 +816,7 @@ static void parse_precedence(parser *p, compiler *c, VM *vm, precedence prec) {
 
 static uint32_t identifier_constant(parser *p, compiler *c, VM *vm, token *name) {
     // Extra code so that new constants aren't required for every use of a variable
-    segment *seg = current_seg();
+    segment *seg = current_seg(c);
     for (uint32_t i = 0; i < seg->constants.len; i++) {
         if (IS_STRING(seg->constants.values[i])) {
             char *const_string = AS_CSTRING(seg->constants.values[i]);
@@ -810,7 +826,7 @@ static uint32_t identifier_constant(parser *p, compiler *c, VM *vm, token *name)
             }
         }
     }
-    return make_constant(p, OBJ_VAL(copy_string(vm, name->start, name->length)));
+    return make_constant(p, c, OBJ_VAL(copy_string(vm, name->start, name->length)));
 }
 
 static uint8_t identifiers_equal(token *a, token *b) {
@@ -953,20 +969,19 @@ static parse_rule *get_rule(token_type type) {
     return &rules[type];
 }
 
-int compile(const char* source, segment *seg, VM *vm) {
+object_function *compile(const char* source, VM *vm) {
     scanner s;
     parser p;
     compiler c;
-    compiling_segment = seg;
     init_scanner(&s, source);
     init_parser(&p, &s);
-    init_compiler(&c);
+    init_compiler(&c, vm, TYPE_SCRIPT);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {
         declaration(&p, &c, vm);
     }
     consume(&p, TOKEN_EOF, "Expect end of expression.");
-    end_compiler(&p);
-    destroy_compiler(&c);
-    return !p.had_error;
+    object_function *f = end_compiler(&p, &c);
+    destroy_compiler(&c, vm);
+    return p.had_error ? NULL : f;
 }
