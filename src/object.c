@@ -24,6 +24,12 @@ object_function *new_function(VM *vm) {
     return f;
 }
 
+object_native *new_native(VM *vm, native_function function) {
+    object_native *n = ALLOCATE_OBJ(vm, object_native, OBJ_NATIVE);
+    n->function = function;
+    return n;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -147,6 +153,9 @@ void print_object(value v) {
             break;
         case OBJ_FUNCTION:
             print_function(AS_FUNCTION(v));
+            break;
+        case OBJ_NATIVE:
+            printf("<native function>");
             break;
     }
 }

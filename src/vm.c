@@ -9,6 +9,7 @@
 #include "compiler.h"
 #include "memory.h"
 #include "object.h"
+#include "stdlib_canidae.h"
 
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
@@ -38,6 +39,13 @@ static void runtime_error(VM *vm, const char *format, ...) {
     reset_stack(vm);
 }
 
+void define_native(VM *vm, const char *name, native_function function) {
+    push(vm, OBJ_VAL(copy_string(vm, name, strlen(name))));
+    push(vm, OBJ_VAL(new_native(vm, function)));
+    hashmap_set(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+    popn(vm, 2);
+}
+
 void init_VM(VM *vm) {
     vm->stack = calloc(STACK_INITIAL, sizeof(value));
     if (vm->stack == NULL) {
@@ -49,6 +57,7 @@ void init_VM(VM *vm) {
     init_hashmap(&vm->strings);
     init_hashmap(&vm->globals);
     reset_stack(vm);
+    define_stdlib(vm);
 }
 
 void destroy_VM(VM *vm) {
@@ -105,8 +114,18 @@ static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
 
 static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
     if (IS_OBJ(callee)) {
-        if (IS_FUNCTION(callee)) {
-            return call(vm, AS_FUNCTION(callee), argc);
+        switch(GET_OBJ_TYPE(callee)) {
+            case OBJ_FUNCTION: {
+                return call(vm, AS_FUNCTION(callee), argc);
+            }
+            case OBJ_NATIVE: {
+                native_function native = AS_NATIVE(callee);
+                value result = native(argc, vm->stack_ptr - argc);
+                vm->stack_ptr -= argc + 1;
+                push(vm, result);
+                return 1;
+            }
+            default: runtime_error(vm, "Can only call functions."); return 0;
         }
     }
     runtime_error(vm, "Can only call functions.");

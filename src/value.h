@@ -15,6 +15,7 @@ typedef struct object object;
 typedef struct object_string object_string;
 typedef struct object_array object_array;
 typedef struct object_function object_function;
+typedef struct object_native object_native;
 
 typedef struct {
     value_type type;
