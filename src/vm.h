@@ -38,6 +38,7 @@ interpret_result interpret(VM *vm, const char *source);
 void push(VM *vm, value val);
 value pop(VM *vm);
 value popn(VM *vm, size_t n);
-void define_native(VM *vm, const char *name, value (*function)(uint8_t argc, value *argv) );
+void define_native(VM *vm, const char *name, value (*function)(VM *vm, uint8_t argc, value *argv) );
+void runtime_error(VM *vm, const char *format, ...);
 
 #endif

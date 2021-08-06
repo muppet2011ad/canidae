@@ -16,7 +16,7 @@ static void reset_stack(VM *vm) {
     vm->frame_count = 0;
 }
 
-static void runtime_error(VM *vm, const char *format, ...) {
+void runtime_error(VM *vm, const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
@@ -120,8 +120,9 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
             }
             case OBJ_NATIVE: {
                 native_function native = AS_NATIVE(callee);
-                value result = native(argc, vm->stack_ptr - argc);
+                value result = native(vm, argc, vm->stack_ptr - argc);
                 vm->stack_ptr -= argc + 1;
+                if (IS_NATIVE_ERROR(result)) return 0;
                 push(vm, result);
                 return 1;
             }
