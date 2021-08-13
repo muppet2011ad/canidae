@@ -116,6 +116,14 @@ static value int_native(VM *vm, uint8_t argc, value *args) {
     return NUMBER_VAL(round(AS_NUMBER(num_native(vm, 1, &args[0]))));
 }
 
+static value bool_native(VM *vm, uint8_t argc, value *args) {
+    if (argc != 1) {
+        runtime_error(vm, "Function 'bool' expects 1 argument (got %u).", argc);
+        return NATIVE_ERROR_VAL;
+    }
+    return BOOL_VAL(!is_falsey(args[0]));
+}
+
 static value clock_native(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
         runtime_error(vm, "Function 'clock' expects 0 arguments (got %u).", argc);
@@ -137,5 +145,6 @@ void define_stdlib(VM *vm) {
     define_native(vm, "str", str_native);
     define_native(vm, "num", num_native);
     define_native(vm, "int", int_native);
+    define_native(vm, "bool", bool_native);
     define_native(vm, "println", print_native);
 }

@@ -133,7 +133,7 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
     return 0;
 }
 
-static uint8_t is_falsey(value v) {
+uint8_t is_falsey(value v) {
     return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0);
 }
 

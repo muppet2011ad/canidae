@@ -40,5 +40,6 @@ value pop(VM *vm);
 value popn(VM *vm, size_t n);
 void define_native(VM *vm, const char *name, value (*function)(VM *vm, uint8_t argc, value *argv) );
 void runtime_error(VM *vm, const char *format, ...);
+uint8_t is_falsey(value v);
 
 #endif
