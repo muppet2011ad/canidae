@@ -126,6 +126,7 @@ static void destroy_compiler(compiler *c, VM *vm) {
     }
     FREE_ARRAY(loop, c->loops, c->loop_capacity);
     init_compiler(NULL, c, vm, TYPE_SCRIPT);
+    free(c->locals);
 }
 
 static segment *current_seg(compiler *c) {
