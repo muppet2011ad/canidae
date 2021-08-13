@@ -75,6 +75,47 @@ static value str_native(VM *vm, uint8_t argc, value *args) {
     return NATIVE_ERROR_VAL;
 }
 
+static value num_native(VM *vm, uint8_t argc, value *args) {
+    if (argc != 1) {
+        runtime_error(vm, "Function 'num' expects 1 argument (got %u).", argc);
+        return NATIVE_ERROR_VAL;
+    }
+    value v = args[0];
+    switch (v.type) {
+        case NUM_TYPE: return v;
+        case BOOL_TYPE: return NUMBER_VAL(v.as.boolean);
+        case NULL_TYPE: return NUMBER_VAL(0);
+        case OBJ_TYPE:
+            switch (GET_OBJ_TYPE(v)) {
+                case OBJ_STRING: {
+                    char *string = AS_CSTRING(v);
+                    double conv = atof(string);
+                    if (conv != 0 || (strspn(string, "0.") == strlen(string) && strchr(string, '.') == strrchr(string, '.'))) {
+                        return NUMBER_VAL(conv);
+                    }
+                    else {
+                        runtime_error(vm, "Could not convert string '%s' to number.");
+                        return NATIVE_ERROR_VAL;
+                    }
+                }
+                default: {
+                    runtime_error(vm, "Invalid type for conversion to number.");
+                    return NATIVE_ERROR_VAL;
+                }
+            }
+    }
+    runtime_error(vm, "Failed to convert value to number.");
+    return NATIVE_ERROR_VAL;
+}
+
+static value int_native(VM *vm, uint8_t argc, value *args) {
+    if (argc != 1) {
+        runtime_error(vm, "Function 'int' expects 1 argument (got %u).", argc);
+        return NATIVE_ERROR_VAL;
+    }
+    return NUMBER_VAL(round(AS_NUMBER(num_native(vm, 1, &args[0]))));
+}
+
 static value clock_native(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
         runtime_error(vm, "Function 'clock' expects 0 arguments (got %u).", argc);
@@ -94,5 +135,7 @@ static value print_native(VM *vm, uint8_t argc, value *args) {
 void define_stdlib(VM *vm) {
     define_native(vm, "clock", clock_native);
     define_native(vm, "str", str_native);
+    define_native(vm, "num", num_native);
+    define_native(vm, "int", int_native);
     define_native(vm, "println", print_native);
 }
