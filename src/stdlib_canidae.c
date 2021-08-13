@@ -37,9 +37,9 @@ static value str_native(VM *vm, uint8_t argc, value *args) {
                     return OBJ_VAL(copy_string(vm, "<native function>", 17));
                 }
                 case OBJ_FUNCTION: {
-                    int len = snprintf(NULL, 0, "<function %s>", AS_FUNCTION(args[0])->name);
+                    int len = snprintf(NULL, 0, "<function %s>", AS_FUNCTION(args[0])->name->chars);
                     char *result = malloc(len+1);
-                    snprintf(result, len + 1, "<function %s>", AS_FUNCTION(args[0])->name);
+                    snprintf(result, len + 1, "<function %s>", AS_FUNCTION(args[0])->name->chars);
                     return OBJ_VAL(take_string(vm, result, len));;
                 }
                 case OBJ_ARRAY: {
@@ -83,7 +83,16 @@ static value clock_native(VM *vm, uint8_t argc, value *args) {
     return NUMBER_VAL(((double)clock()/CLOCKS_PER_SEC));
 }
 
+static value print_native(VM *vm, uint8_t argc, value *args) {
+    for (uint8_t i = 0; i < argc; i++) {
+        printf(AS_CSTRING(str_native(vm, 1, &args[i])));
+    }
+    puts("");
+    return NULL_VAL;
+}
+
 void define_stdlib(VM *vm) {
     define_native(vm, "clock", clock_native);
     define_native(vm, "str", str_native);
+    define_native(vm, "println", print_native);
 }
