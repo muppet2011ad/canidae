@@ -32,7 +32,7 @@ void runtime_error(VM *vm, const char *format, ...) {
             fprintf(stderr, "script\n");
         }
         else {
-            fprintf(stderr, "%s()n", function->name->chars);
+            fprintf(stderr, "%s()\n", function->name->chars);
         }
     }
 
