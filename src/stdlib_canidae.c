@@ -124,6 +124,25 @@ static value bool_native(VM *vm, uint8_t argc, value *args) {
     return BOOL_VAL(!is_falsey(args[0]));
 }
 
+static value len_native(VM *vm, uint8_t argc, value *args) {
+    if (argc != 1) {
+        runtime_error(vm, "Function 'len' expects 1 argument (got %u).", argc);
+        return NATIVE_ERROR_VAL;
+    }
+    if (args[0].type != OBJ_TYPE) {
+        runtime_error(vm, "Invalid type to get length.");
+        return NATIVE_ERROR_VAL;
+    }
+    switch(GET_OBJ_TYPE(args[0])) {
+        case OBJ_ARRAY: return NUMBER_VAL(AS_ARRAY(args[0])->arr.len);
+        case OBJ_STRING: return NUMBER_VAL(AS_STRING(args[0])->length);
+        default: {
+            runtime_error(vm, "Invalid type to get length.");
+            return NATIVE_ERROR_VAL;
+        }
+    }
+}
+
 static value clock_native(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
         runtime_error(vm, "Function 'clock' expects 0 arguments (got %u).", argc);
@@ -146,5 +165,6 @@ void define_stdlib(VM *vm) {
     define_native(vm, "num", num_native);
     define_native(vm, "int", int_native);
     define_native(vm, "bool", bool_native);
+    define_native(vm, "len", len_native);
     define_native(vm, "println", print_native);
 }
