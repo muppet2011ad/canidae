@@ -98,7 +98,7 @@ static void add_local(parser *p, compiler *c, token name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
 
-static void init_compiler(parser *p, compiler *c, VM *vm, function_type type) {
+static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id) {
     c->local_count = 0;
     c->local_capacity = 0;
     c->scope_depth = 0;
@@ -110,11 +110,16 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type) {
     c->type = type;
     c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
-    t.length = 0;
-    t.start = "";
-    add_local(NULL, c, t);
+    if (id) {
+        t = *id;
+    }
+    else {
+        t.start = "";
+        t.length = 0;
+    }
+    add_local(p, c, t);
     c->locals[c->local_count].depth = 0;
-        if (type != TYPE_SCRIPT) {
+    if (type != TYPE_SCRIPT) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
 }
@@ -125,7 +130,7 @@ static void destroy_compiler(compiler *c, VM *vm) {
         free_loop(c->loops[i]);
     }
     FREE_ARRAY(loop, c->loops, c->loop_capacity);
-    init_compiler(NULL, c, vm, TYPE_SCRIPT);
+    init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL);
     free(c->locals);
 }
 
@@ -603,8 +608,9 @@ static void block(parser *p, compiler *c, VM *vm) {
 
 static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
-    init_compiler(p, &function_compiler, vm, type);
+    init_compiler(p, &function_compiler, vm, type, &p->prev);
     begin_scope(&function_compiler);
+    mark_initialised(&function_compiler);
     consume(p, TOKEN_LEFT_PAREN, "Expect '(' after function name.");
     if (!check(p, TOKEN_RIGHT_PAREN)) {
         do {
@@ -620,6 +626,7 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     consume(p, TOKEN_LEFT_BRACE, "Expect '{' before function body.");
     block(p, &function_compiler, vm);
     object_function *function = end_compiler(p, &function_compiler);
+    destroy_compiler(&function_compiler, vm);
     emit_2_bytes(p, c, OP_CONSTANT, make_constant(p, c, OBJ_VAL(function)));
 }
 
@@ -1049,7 +1056,7 @@ object_function *compile(const char* source, VM *vm) {
     compiler c;
     init_scanner(&s, source);
     init_parser(&p, &s);
-    init_compiler(&p, &c, vm, TYPE_SCRIPT);
+    init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {
         declaration(&p, &c, vm);
