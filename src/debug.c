@@ -113,6 +113,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
             return raw_byte_instruction("OP_POPN", s, offset);
+        case OP_CALL:
+            return raw_byte_instruction("OP_CALL", s, offset);
         case OP_DEFINE_GLOBAL:
             return constant_long_instruction("OP_DEFINE_GLOBAL", s, offset);
         case OP_GET_GLOBAL:

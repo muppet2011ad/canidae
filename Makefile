@@ -6,9 +6,9 @@ BUILD_FOLDER := bin
 
 DEBUG_OPTS := -DDEBUG_PRINT_CODE -DDEBUG_TRACE_EXECUTION
 
-MAIN_DEPS := $(BUILD_FOLDER)/memory.o $(BUILD_FOLDER)/segment.o $(BUILD_FOLDER)/main.o $(BUILD_FOLDER)/debug.o $(BUILD_FOLDER)/value.o $(BUILD_FOLDER)/vm.o $(BUILD_FOLDER)/compiler.o $(BUILD_FOLDER)/scanner.o $(BUILD_FOLDER)/object.o $(BUILD_FOLDER)/hashmap.o
+MAIN_DEPS := $(BUILD_FOLDER)/memory.o $(BUILD_FOLDER)/segment.o $(BUILD_FOLDER)/main.o $(BUILD_FOLDER)/debug.o $(BUILD_FOLDER)/value.o $(BUILD_FOLDER)/vm.o $(BUILD_FOLDER)/compiler.o $(BUILD_FOLDER)/scanner.o $(BUILD_FOLDER)/object.o $(BUILD_FOLDER)/hashmap.o $(BUILD_FOLDER)/stdlib_canidae.o
 
-DEBUG_DEPS := $(BUILD_FOLDER)/memory_debug.o $(BUILD_FOLDER)/segment_debug.o $(BUILD_FOLDER)/main_debug.o $(BUILD_FOLDER)/debug_debug.o $(BUILD_FOLDER)/value_debug.o $(BUILD_FOLDER)/vm_debug.o $(BUILD_FOLDER)/compiler_debug.o $(BUILD_FOLDER)/scanner_debug.o $(BUILD_FOLDER)/object_debug.o $(BUILD_FOLDER)/hashmap_debug.o
+DEBUG_DEPS := $(BUILD_FOLDER)/memory_debug.o $(BUILD_FOLDER)/segment_debug.o $(BUILD_FOLDER)/main_debug.o $(BUILD_FOLDER)/debug_debug.o $(BUILD_FOLDER)/value_debug.o $(BUILD_FOLDER)/vm_debug.o $(BUILD_FOLDER)/compiler_debug.o $(BUILD_FOLDER)/scanner_debug.o $(BUILD_FOLDER)/object_debug.o $(BUILD_FOLDER)/hashmap_debug.o $(BUILD_FOLDER)/stdlib_canidae_debug.o
 
 all: $(BUILD_FOLDER)/canidae $(BUILD_FOLDER)/canidae_debug
 

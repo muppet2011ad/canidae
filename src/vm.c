@@ -9,22 +9,43 @@
 #include "compiler.h"
 #include "memory.h"
 #include "object.h"
+#include "stdlib_canidae.h"
+
+#define STACK_LEN(vm) (vm->stack_ptr - vm->stack)
 
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
+    vm->frame_count = 0;
 }
 
-static void runtime_error(VM *vm, const char *format, ...) {
+void runtime_error(VM *vm, const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
     va_end(args);
     fputs("\n", stderr);
 
-    size_t instruction = vm->ip - vm->s->bytecode - 1;
-    uint32_t line = vm->s->lines[instruction];
-    fprintf(stderr, "[line %u] in script\n", line);
+    for (int32_t i = vm->frame_count - 1; i >= 0; i--) {
+        call_frame *frame = &vm->frames[i];
+        object_function *function = frame->function;
+        size_t instruction = frame->ip - function->seg.bytecode - 1;
+        fprintf(stderr, "[line %u] in ", function->seg.lines[instruction]);
+        if (function->name == NULL) {
+            fprintf(stderr, "script\n");
+        }
+        else {
+            fprintf(stderr, "%s()\n", function->name->chars);
+        }
+    }
+
     reset_stack(vm);
+}
+
+void define_native(VM *vm, const char *name, native_function function) {
+    push(vm, OBJ_VAL(copy_string(vm, name, strlen(name))));
+    push(vm, OBJ_VAL(new_native(vm, function)));
+    hashmap_set(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+    popn(vm, 2);
 }
 
 void init_VM(VM *vm) {
@@ -32,12 +53,12 @@ void init_VM(VM *vm) {
     if (vm->stack == NULL) {
         fprintf(stderr, "Out of memory.");
     }
-    vm->stack_len = 0;
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
     init_hashmap(&vm->strings);
     init_hashmap(&vm->globals);
     reset_stack(vm);
+    define_stdlib(vm);
 }
 
 void destroy_VM(VM *vm) {
@@ -48,27 +69,28 @@ void destroy_VM(VM *vm) {
 }
 
 void push(VM *vm, value val) {
-    if (vm->stack_len >= vm->stack_capacity) {
+    if (STACK_LEN(vm) >= vm->stack_capacity) {
         size_t old_capacity = vm->stack_capacity;
-        size_t ptr_diff = ((size_t) vm->stack_ptr - (size_t) vm->stack)/sizeof(value);
+        size_t len = STACK_LEN(vm);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
         vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
-        vm->stack_ptr = vm->stack + ptr_diff;
+        vm->stack_ptr = &(vm->stack[len]);
+        for (size_t i = 0; i < vm->frame_count; i++) {
+            call_frame *frame = &vm->frames[i];
+            frame->slots = &(vm->stack[frame->slot_offset]);
+        }
     }
     *vm->stack_ptr = val;
     vm->stack_ptr++;
-    vm->stack_len++;
 }
 
 value pop(VM *vm) {
     vm->stack_ptr--;
-    vm->stack_len--;
     return *vm->stack_ptr;
 }
 
 value popn(VM *vm, size_t n) {
-    vm->stack_ptr -= n;
-    vm->stack_len -= n;
+    vm->stack_ptr += -n;
     return *vm->stack_ptr;
 }
 
@@ -76,7 +98,45 @@ static value peek(VM *vm, int distance) {
     return vm->stack_ptr[-1 - distance];
 }
 
-static uint8_t is_falsey(value v) {
+static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
+    if (argc != function->arity) {
+        runtime_error(vm, "Function '%s' expects %u arguments (got %u).", function->name->chars, function->arity, argc);
+        return 0;
+    }
+    if (vm->frame_count == FRAMES_MAX) {
+        runtime_error(vm, "Exceeded max call depth (%u).", FRAMES_MAX);
+        return 0;
+    }
+    call_frame *frame = &vm->frames[vm->frame_count++];
+    frame->function = function;
+    frame->ip = function->seg.bytecode;
+    frame->slots = vm->stack_ptr - argc - 1;
+    frame->slot_offset = STACK_LEN(vm) - argc -1;
+    return 1;
+}
+
+static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
+    if (IS_OBJ(callee)) {
+        switch(GET_OBJ_TYPE(callee)) {
+            case OBJ_FUNCTION: {
+                return call(vm, AS_FUNCTION(callee), argc);
+            }
+            case OBJ_NATIVE: {
+                native_function native = AS_NATIVE(callee);
+                value result = native(vm, argc, vm->stack_ptr - argc);
+                vm->stack_ptr -= argc + 1;
+                if (IS_NATIVE_ERROR(result)) return 0;
+                push(vm, result);
+                return 1;
+            }
+            default: runtime_error(vm, "Can only call functions."); return 0;
+        }
+    }
+    runtime_error(vm, "Can only call functions.");
+    return 0;
+}
+
+uint8_t is_falsey(value v) {
     return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0);
 }
 
@@ -183,12 +243,13 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
 }
 
 static interpret_result run(VM *vm) {
-    #define READ_BYTE() (*vm->ip++)
-    #define READ_CONSTANT() (vm->s->constants.values[READ_BYTE()])    
+    call_frame *frame = &vm->frames[vm->frame_count - 1];
+    #define READ_BYTE() (*frame->ip++)
+    #define READ_CONSTANT() (frame->function->seg.constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
     #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
-    #define READ_CONSTANT_LONG() (vm->s->constants.values[READ_UINT24()])
+    #define READ_CONSTANT_LONG() (frame->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \
         do { \
@@ -246,13 +307,21 @@ static interpret_result run(VM *vm) {
                 printf("]");
             }
             printf("\n");
-            dissassemble_instruction(vm->s, (size_t) (vm->ip - vm->s->bytecode));
+            dissassemble_instruction(&frame->function->seg, (size_t) (frame->ip - frame->function->seg.bytecode));
         #endif
         switch (instruction = READ_BYTE()) {
-            case OP_RETURN:
-                //print_value(pop(vm));
-                //printf("\n");
-                return INTERPRET_OK;
+            case OP_RETURN:{
+                value result = pop(vm);
+                vm->frame_count--;
+                if (vm->frame_count == 0) {
+                    pop(vm);
+                    return INTERPRET_OK;
+                }
+                vm->stack_ptr = frame->slots;
+                push(vm, result);
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
             case OP_NEGATE:
                 if (!IS_NUMBER(peek(vm, 0))) {
                     runtime_error(vm, "Operand must be a number.");
@@ -366,6 +435,14 @@ static interpret_result run(VM *vm) {
                 popn(vm, n);
                 break;
             }
+            case OP_CALL: {
+                uint8_t argc = READ_BYTE();
+                if (!call_value(vm, peek(vm, argc), argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
             case OP_DEFINE_GLOBAL: {
                 object_string *name = READ_STRING();
                 hashmap_set(&vm->globals, name, peek(vm, 0));
@@ -393,12 +470,12 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_LOCAL: {
                 uint32_t arg = READ_UINT24();
-                push(vm, vm->stack[arg]);
+                push(vm, frame->slots[arg]);
                 break;
             }
             case OP_SET_LOCAL: {
                 uint32_t arg = READ_UINT24();
-                vm->stack[arg] = peek(vm, 0);
+                frame->slots[arg] = peek(vm, 0);
                 break;
             }
             case OP_CONSTANT_LONG: {
@@ -408,22 +485,22 @@ static interpret_result run(VM *vm) {
             }
             case OP_JUMP_IF_FALSE: {
                 uint64_t offset = READ_UINT40();
-                if (is_falsey(peek(vm, 0))) vm->ip += offset;
+                if (is_falsey(peek(vm, 0))) frame->ip += offset;
                 break;
             }
             case OP_JUMP_IF_TRUE: {
                 uint64_t offset = READ_UINT40();
-                if (!is_falsey(peek(vm, 0))) vm->ip += offset;
+                if (!is_falsey(peek(vm, 0))) frame->ip += offset;
                 break;
             }
             case OP_JUMP: {
                 uint64_t offset = READ_UINT40();
-                vm->ip += offset;
+                frame->ip += offset;
                 break;
             }
             case OP_LOOP: {
                 uint64_t offset = READ_UINT40();
-                vm->ip -= offset;
+                frame->ip -= offset;
                 break;
             }
         }
@@ -441,21 +518,11 @@ static interpret_result run(VM *vm) {
 }
 
 interpret_result interpret(VM *vm, const char *source) {
-    segment seg;
-    init_segment(&seg);
+    object_function *function = compile(source, vm);
+    if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
-    if (!compile(source, &seg, vm)) {
-        destroy_segment(&seg);
-        return INTERPRET_COMPILE_ERROR;
-    }
+    push(vm, OBJ_VAL(function));
+    call(vm, function, 0);
 
-    vm->s = &seg;
-    vm->ip = vm->s->bytecode;
-
-    interpret_result result = run(vm);
-
-    destroy_segment(&seg);
-    
-    return result;
-    //return run(vm);
+    return run(vm);
 }

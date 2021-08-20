@@ -1,0 +1,13 @@
+{
+    function no_args() {
+        print "Hello, World!";
+    }
+
+    function print_function(arg) {
+        print arg;
+    }
+
+    print_function("Hello, World!");
+    print_function(print_function);
+    no_args();
+}

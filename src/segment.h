@@ -37,6 +37,7 @@ typedef enum {
     // One-byte operand
     OP_CONSTANT,
     OP_POPN,
+    OP_CALL,
     // Three-byte operand 
     OP_CONSTANT_LONG,
     OP_DEFINE_GLOBAL,

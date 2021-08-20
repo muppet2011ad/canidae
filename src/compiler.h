@@ -3,7 +3,8 @@
 #define canidae_compiler_h
 
 #include "vm.h"
+#include "object.h"
 
-int compile(const char* source, segment *seg, VM *vm);
+object_function *compile(const char* source, VM *vm);
 
 #endif
