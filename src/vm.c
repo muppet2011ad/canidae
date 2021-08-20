@@ -70,10 +70,13 @@ void destroy_VM(VM *vm) {
 void push(VM *vm, value val) {
     if (vm->stack_len >= vm->stack_capacity) {
         size_t old_capacity = vm->stack_capacity;
-        size_t ptr_diff = ((size_t) vm->stack_ptr - (size_t) vm->stack)/sizeof(value);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
         vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
-        vm->stack_ptr = vm->stack + ptr_diff;
+        vm->stack_ptr = &(vm->stack[vm->stack_len]);
+        for (size_t i = 0; i < vm->frame_count; i++) {
+            call_frame *frame = &vm->frames[i];
+            frame->slots = &(vm->stack[frame->slot_offset]);
+        }
     }
     *vm->stack_ptr = val;
     vm->stack_ptr++;
@@ -87,7 +90,7 @@ value pop(VM *vm) {
 }
 
 value popn(VM *vm, size_t n) {
-    vm->stack_ptr -= n;
+    vm->stack_ptr += -n;
     vm->stack_len -= n;
     return *vm->stack_ptr;
 }
@@ -109,6 +112,7 @@ static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
     frame->function = function;
     frame->ip = function->seg.bytecode;
     frame->slots = vm->stack_ptr - argc - 1;
+    frame->slot_offset = vm->stack_len - argc -1;
     return 1;
 }
 
@@ -122,6 +126,7 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 native_function native = AS_NATIVE(callee);
                 value result = native(vm, argc, vm->stack_ptr - argc);
                 vm->stack_ptr -= argc + 1;
+                vm->stack_len -= argc + 1;
                 if (IS_NATIVE_ERROR(result)) return 0;
                 push(vm, result);
                 return 1;
@@ -314,6 +319,7 @@ static interpret_result run(VM *vm) {
                     pop(vm);
                     return INTERPRET_OK;
                 }
+                vm->stack_len = vm->stack_ptr - frame->slots;
                 vm->stack_ptr = frame->slots;
                 push(vm, result);
                 frame = &vm->frames[vm->frame_count - 1];

@@ -5,13 +5,14 @@
 #include "segment.h"
 #include "hashmap.h"
 
-#define STACK_INITIAL 256
+#define STACK_INITIAL 4
 #define FRAMES_MAX 1024
 
 typedef struct {
     object_function *function;
     uint8_t *ip;
     value *slots;
+    size_t slot_offset;
 } call_frame;
 
 typedef struct {
