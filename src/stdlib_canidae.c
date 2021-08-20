@@ -9,7 +9,7 @@
 #include <math.h>
 #include "stdlib_canidae.h"
 
-static value str_native(VM *vm, uint8_t argc, value *args) {
+static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value to string - should be given name "str"
     if (argc != 1) {
         runtime_error(vm, "Function 'str' expects 1 argument (got %u).", argc);
         return NATIVE_ERROR_VAL;
@@ -66,6 +66,7 @@ static value str_native(VM *vm, uint8_t argc, value *args) {
                     if (capacity < len + 2) result = realloc(result, len + 2);
                     strcat(result, "]\0");
                     return OBJ_VAL(take_string(vm, result, len));
+                    #undef APPEND_VAL
                 }
             }
             break;
@@ -75,7 +76,13 @@ static value str_native(VM *vm, uint8_t argc, value *args) {
     return NATIVE_ERROR_VAL;
 }
 
-static value num_native(VM *vm, uint8_t argc, value *args) {
+static void print_args(VM *vm, uint8_t argc, value *args) { // Helper function to print values
+    for (uint8_t i = 0; i < argc; i++) {
+        printf(AS_CSTRING(str_native(vm, 1, &args[i])));
+    }
+}
+
+static value num_native(VM *vm, uint8_t argc, value *args) { // Converts to number, should be given name "num"
     if (argc != 1) {
         runtime_error(vm, "Function 'num' expects 1 argument (got %u).", argc);
         return NATIVE_ERROR_VAL;
@@ -108,7 +115,7 @@ static value num_native(VM *vm, uint8_t argc, value *args) {
     return NATIVE_ERROR_VAL;
 }
 
-static value int_native(VM *vm, uint8_t argc, value *args) {
+static value int_native(VM *vm, uint8_t argc, value *args) { // Converts to number then rounds, should be given name "int"
     if (argc != 1) {
         runtime_error(vm, "Function 'int' expects 1 argument (got %u).", argc);
         return NATIVE_ERROR_VAL;
@@ -116,7 +123,7 @@ static value int_native(VM *vm, uint8_t argc, value *args) {
     return NUMBER_VAL(round(AS_NUMBER(num_native(vm, 1, &args[0]))));
 }
 
-static value bool_native(VM *vm, uint8_t argc, value *args) {
+static value bool_native(VM *vm, uint8_t argc, value *args) { // Evaluates whether its arg is truthy or falsey, should be given name "bool"
     if (argc != 1) {
         runtime_error(vm, "Function 'bool' expects 1 argument (got %u).", argc);
         return NATIVE_ERROR_VAL;
@@ -124,7 +131,7 @@ static value bool_native(VM *vm, uint8_t argc, value *args) {
     return BOOL_VAL(!is_falsey(args[0]));
 }
 
-static value len_native(VM *vm, uint8_t argc, value *args) {
+static value len_native(VM *vm, uint8_t argc, value *args) { // Gets length of array or string, should be given name "len"
     if (argc != 1) {
         runtime_error(vm, "Function 'len' expects 1 argument (got %u).", argc);
         return NATIVE_ERROR_VAL;
@@ -143,6 +150,31 @@ static value len_native(VM *vm, uint8_t argc, value *args) {
     }
 }
 
+static value read_line(VM *vm, FILE *f) { // Helper function to read a line as an obj_string, not intended to be a directly accessible part of the lib
+    size_t capacity = 0;
+    size_t len = 0;
+    char *s = ALLOCATE(char, 8);
+    char c;
+    while (EOF != (c = fgetc(f)) && c != '\r' && c != '\n') {
+        if (capacity == len) {
+            size_t oldc = capacity;
+            capacity = GROW_CAPACITY(capacity);
+            s = GROW_ARRAY(char, s, oldc, capacity);
+        } 
+        s[len++] = c;
+    }
+    s[len++] = '\0';
+    value canidae_string = OBJ_VAL(copy_string(vm, s, len));
+    free(s);
+    return canidae_string;
+}
+
+static value input(VM *vm, uint8_t argc, value *args) {
+    print_args(vm, argc, args);
+    value line = read_line(vm, stdin);
+    return line;
+}
+
 static value clock_native(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
         runtime_error(vm, "Function 'clock' expects 0 arguments (got %u).", argc);
@@ -152,9 +184,7 @@ static value clock_native(VM *vm, uint8_t argc, value *args) {
 }
 
 static value print_native(VM *vm, uint8_t argc, value *args) {
-    for (uint8_t i = 0; i < argc; i++) {
-        printf(AS_CSTRING(str_native(vm, 1, &args[i])));
-    }
+    print_args(vm, argc, args);
     puts("");
     return NULL_VAL;
 }
@@ -167,4 +197,5 @@ void define_stdlib(VM *vm) {
     define_native(vm, "bool", bool_native);
     define_native(vm, "len", len_native);
     define_native(vm, "println", print_native);
+    define_native(vm, "input", input);
 }
