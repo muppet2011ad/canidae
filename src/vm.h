@@ -19,7 +19,6 @@ typedef struct {
     call_frame frames[FRAMES_MAX];
     uint16_t frame_count;
     value *stack;
-    size_t stack_len;
     size_t stack_capacity;
     value *stack_ptr;
     hashmap strings;

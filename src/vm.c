@@ -11,6 +11,8 @@
 #include "object.h"
 #include "stdlib_canidae.h"
 
+#define STACK_LEN(vm) (vm->stack_ptr - vm->stack)
+
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
     vm->frame_count = 0;
@@ -51,7 +53,6 @@ void init_VM(VM *vm) {
     if (vm->stack == NULL) {
         fprintf(stderr, "Out of memory.");
     }
-    vm->stack_len = 0;
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
     init_hashmap(&vm->strings);
@@ -68,11 +69,12 @@ void destroy_VM(VM *vm) {
 }
 
 void push(VM *vm, value val) {
-    if (vm->stack_len >= vm->stack_capacity) {
+    if (STACK_LEN(vm) >= vm->stack_capacity) {
         size_t old_capacity = vm->stack_capacity;
+        size_t len = STACK_LEN(vm);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
         vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
-        vm->stack_ptr = &(vm->stack[vm->stack_len]);
+        vm->stack_ptr = &(vm->stack[len]);
         for (size_t i = 0; i < vm->frame_count; i++) {
             call_frame *frame = &vm->frames[i];
             frame->slots = &(vm->stack[frame->slot_offset]);
@@ -80,18 +82,15 @@ void push(VM *vm, value val) {
     }
     *vm->stack_ptr = val;
     vm->stack_ptr++;
-    vm->stack_len++;
 }
 
 value pop(VM *vm) {
     vm->stack_ptr--;
-    vm->stack_len--;
     return *vm->stack_ptr;
 }
 
 value popn(VM *vm, size_t n) {
     vm->stack_ptr += -n;
-    vm->stack_len -= n;
     return *vm->stack_ptr;
 }
 
@@ -112,7 +111,7 @@ static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
     frame->function = function;
     frame->ip = function->seg.bytecode;
     frame->slots = vm->stack_ptr - argc - 1;
-    frame->slot_offset = vm->stack_len - argc -1;
+    frame->slot_offset = STACK_LEN(vm) - argc -1;
     return 1;
 }
 
@@ -126,7 +125,6 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 native_function native = AS_NATIVE(callee);
                 value result = native(vm, argc, vm->stack_ptr - argc);
                 vm->stack_ptr -= argc + 1;
-                vm->stack_len -= argc + 1;
                 if (IS_NATIVE_ERROR(result)) return 0;
                 push(vm, result);
                 return 1;
@@ -319,7 +317,6 @@ static interpret_result run(VM *vm) {
                     pop(vm);
                     return INTERPRET_OK;
                 }
-                vm->stack_len = vm->stack_ptr - frame->slots;
                 vm->stack_ptr = frame->slots;
                 push(vm, result);
                 frame = &vm->frames[vm->frame_count - 1];
