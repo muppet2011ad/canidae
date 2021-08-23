@@ -24,6 +24,12 @@ object_function *new_function(VM *vm) {
     return f;
 }
 
+object_closure *new_closure(VM *vm, object_function *function) {
+    object_closure *closure = ALLOCATE_OBJ(vm, object_closure, OBJ_CLOSURE);
+    closure->function = function;
+    return closure;
+}
+
 object_native *new_native(VM *vm, native_function function) {
     object_native *n = ALLOCATE_OBJ(vm, object_native, OBJ_NATIVE);
     n->function = function;
@@ -156,6 +162,9 @@ void print_object(value v) {
             break;
         case OBJ_NATIVE:
             printf("<native function>");
+            break;
+        case OBJ_CLOSURE:
+            print_function(AS_CLOSURE(v)->function);
             break;
     }
 }

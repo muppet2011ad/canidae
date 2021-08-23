@@ -29,6 +29,11 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
             return OBJ_VAL(copy_string(vm, args[0].as.boolean ? "true" : "false", args[0].as.boolean ? 4 : 5));
         }
         case OBJ_TYPE: {
+            #define FN_TO_STRING(function) \
+                int len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
+                char *result = malloc(len+1); \
+                snprintf(result, len + 1, "<function %s>", function->name->chars); \
+                return OBJ_VAL(take_string(vm, result, len));
             switch (GET_OBJ_TYPE(args[0])) {
                 case OBJ_STRING: {
                     return args[0];
@@ -37,10 +42,10 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     return OBJ_VAL(copy_string(vm, "<native function>", 17));
                 }
                 case OBJ_FUNCTION: {
-                    int len = snprintf(NULL, 0, "<function %s>", AS_FUNCTION(args[0])->name->chars);
-                    char *result = malloc(len+1);
-                    snprintf(result, len + 1, "<function %s>", AS_FUNCTION(args[0])->name->chars);
-                    return OBJ_VAL(take_string(vm, result, len));;
+                    FN_TO_STRING(AS_FUNCTION(args[0]));
+                }
+                case OBJ_CLOSURE: {
+                    FN_TO_STRING(AS_CLOSURE(args[0])->function);
                 }
                 case OBJ_ARRAY: {
                     #define APPEND_VAL(i) \
@@ -69,6 +74,7 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     #undef APPEND_VAL
                 }
             }
+            #undef FN_TO_STRING
             break;
         }
     }

@@ -12,18 +12,21 @@
 #define IS_ARRAY(v) is_obj_type(v, OBJ_ARRAY)
 #define IS_FUNCTION(v) is_obj_type(v, OBJ_FUNCTION)
 #define IS_NATIVE(v) is_obj_type(v, OBJ_NATIVE)
+#define IS_CLOSURE(v) is_obj_type(v, OBJ_CLOSURE)
 
 #define AS_ARRAY(v) ((object_array*)AS_OBJ(v))
 #define AS_STRING(v) ((object_string*)AS_OBJ(v))
 #define AS_CSTRING(v) (((object_string*)AS_OBJ(v))->chars)
 #define AS_FUNCTION(v) ((object_function*)AS_OBJ(v))
 #define AS_NATIVE(v) (((object_native*)AS_OBJ(v))->function)
+#define AS_CLOSURE(v) ((object_closure*)AS_OBJ(v))
 
 typedef enum {
     OBJ_STRING,
     OBJ_ARRAY,
     OBJ_FUNCTION,
     OBJ_NATIVE,
+    OBJ_CLOSURE,
 } object_type;
 
 typedef value (*native_function)(VM *vm, uint8_t argc, value *argv);
@@ -45,6 +48,11 @@ struct object_function {
     object_string *name;
 };
 
+struct object_closure {
+    object obj;
+    object_function *function;
+};
+
 struct object_string {
     object obj;
     size_t length;
@@ -59,6 +67,7 @@ struct object_array {
 
 object_native *new_native(VM *vm, native_function function);
 object_function *new_function(VM *vm);
+object_closure *new_closure(VM *vm, object_function *function);
 object_string *take_string(VM *vm, char *chars, size_t length);
 object_string *copy_string(VM *vm, const char *chars, size_t length);
 object_array *allocate_array(VM *vm, value *values, size_t length);
