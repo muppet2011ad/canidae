@@ -11,8 +11,6 @@
 #include "object.h"
 #include "stdlib_canidae.h"
 
-#define STACK_LEN(vm) (vm->stack_ptr - vm->stack)
-
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
     vm->frame_count = 0;
@@ -59,7 +57,7 @@ void init_VM(VM *vm) {
     vm->grey_count = 0;
     vm->grey_stack = NULL;
     vm->bytes_allocated = STACK_INITIAL*sizeof(value); // Include initial stack allocation in heap allocation
-    vm->gc_threshold = 16 * 1024; // Arbitrary threshold
+    vm->gc_threshold = GC_THRESHOLD_INITIAL; // Arbitrary threshold
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
     init_hashmap(&vm->strings);
@@ -84,27 +82,33 @@ void disable_gc(VM *vm) {
     vm->gc_allowed = 0;
 }
 
-void push(VM *vm, value val) {
-    if (STACK_LEN(vm) >= vm->stack_capacity) {
-        disable_gc(vm);
-        size_t old_capacity = vm->stack_capacity;
-        size_t len = STACK_LEN(vm);
-        vm->stack_capacity = GROW_CAPACITY(old_capacity);
-        value *stack_old = vm->stack;
-        vm->stack = GROW_ARRAY(vm, value, vm->stack, old_capacity, vm->stack_capacity);
-        vm->stack_ptr = &(vm->stack[len]);
+void resize_stack(VM *vm, size_t target_size) {
+    disable_gc(vm);
+    size_t oldc = vm->stack_capacity;
+    size_t len = STACK_LEN(vm);
+    vm->stack_capacity = target_size;
+    value *stack_old = vm->stack;
+    vm->stack = GROW_ARRAY(vm, value, vm->stack, oldc, vm->stack_capacity);
+    vm->stack_ptr = &(vm->stack[len]);
+    if (vm->stack != stack_old) { // If realloc has moved the stack, we need to update all pointers to the stack in upvalues and call frames
         for (size_t i = 0; i < vm->frame_count; i++) { // Moves stack frames to meet the new stack size
             call_frame *frame = &vm->frames[i];
             frame->slots = &(vm->stack[frame->slot_offset]);
         }
-        object_upvalue *upval = vm->open_upvalues; // We also need to update open upvalues
+        object_upvalue *upval = vm->open_upvalues;
         while (upval != NULL) {
             if (&upval->closed != upval->location) { // If not closed, location must be on the stack
                 upval->location = vm->stack + (upval->location - stack_old); // Calculate new pointer to location on stack
             }
             upval = upval->next; // Move onto the next upvalue
         }
-        enable_gc(vm);
+    }
+    enable_gc(vm);
+}
+
+void push(VM *vm, value val) {
+    if (STACK_LEN(vm) >= vm->stack_capacity) {
+        resize_stack(vm, GROW_CAPACITY(vm->stack_capacity));
     }
     *vm->stack_ptr = val;
     vm->stack_ptr++;

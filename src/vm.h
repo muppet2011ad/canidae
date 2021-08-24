@@ -5,8 +5,9 @@
 #include "segment.h"
 #include "hashmap.h"
 
-#define STACK_INITIAL 256
+#define STACK_INITIAL 64
 #define FRAMES_MAX 1024
+#define GC_THRESHOLD_INITIAL 2.5 * 1024
 
 typedef struct {
     object_closure *closure;
@@ -33,6 +34,8 @@ typedef struct VM {
     object *objects;
 } VM;
 
+#define STACK_LEN(vm) (vm->stack_ptr - vm->stack)
+
 typedef enum {
     INTERPRET_OK,
     INTERPRET_COMPILE_ERROR,
@@ -50,5 +53,6 @@ void runtime_error(VM *vm, const char *format, ...);
 uint8_t is_falsey(value v);
 void enable_gc(VM *vm);
 void disable_gc(VM *vm);
+void resize_stack(VM *vm, size_t target_size);
 
 #endif

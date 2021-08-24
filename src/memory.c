@@ -186,10 +186,21 @@ void collect_garbage(VM *vm) {
         size_t before = vm->bytes_allocated;
     #endif
 
+    // Perform gc on heap values
     mark_roots(vm);
     trace_references(vm);
     hashmap_remove_white(vm, &vm->strings);
     sweep(vm);
+
+    // Consider shrinking stack if it's particularly oversized
+    size_t stack_length = STACK_LEN(vm);
+    if (vm->stack_capacity >= STACK_INITIAL*2 && stack_length*4 < vm->stack_capacity) {
+        size_t oldc = vm->stack_capacity;
+        resize_stack(vm, vm->stack_capacity/2);
+        #ifdef DEBUG_LOG_GC
+            printf("shrunk VM stack by %zu bytes (from %zu to %zu)\n", (oldc - vm->stack_capacity)*sizeof(value), oldc*sizeof(value), vm->stack_capacity*sizeof(value));
+        #endif
+    }
 
     vm->gc_threshold = vm->bytes_allocated * GC_HEAP_GROW_FACTOR;
 
