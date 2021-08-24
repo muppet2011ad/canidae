@@ -34,6 +34,7 @@ typedef enum {
     OP_ARRAY_GET,
     OP_ARRAY_GET_KEEP_REF,
     OP_ARRAY_SET,
+    OP_CLOSE_UPVALUE,
     // One-byte operand
     OP_CONSTANT,
     OP_POPN,

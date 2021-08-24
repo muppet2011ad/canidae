@@ -45,6 +45,8 @@ object_native *new_native(VM *vm, native_function function) {
 object_upvalue *new_upvalue(VM *vm, value *slot) {
     object_upvalue *upvalue = ALLOCATE_OBJ(vm, object_upvalue, OBJ_UPVALUE);
     upvalue->location = slot;
+    upvalue->closed = NULL_VAL;
+    upvalue->next = NULL;
     return upvalue;
 }
 

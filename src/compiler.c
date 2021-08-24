@@ -22,6 +22,7 @@ typedef struct {
 typedef struct {
     token name;
     long depth;
+    uint8_t is_captured;
 } local;
 
 typedef struct {
@@ -133,6 +134,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     }
     add_local(p, c, t);
     c->locals[c->local_count].depth = 0;
+    c->locals[c->local_count].is_captured = 0;
     if (type != TYPE_SCRIPT) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
@@ -326,17 +328,24 @@ static void begin_scope(compiler *c) {
 static void end_scope(parser *p, compiler *c) {
     c->scope_depth--;
 
-    long to_pop = 0;
     while (c->local_count > 0 && c->locals[c->local_count-1].depth > c->scope_depth) {
-        to_pop++;
-        c->local_count--;
-    }
-    for (; to_pop > 0; to_pop-=255) {
-        if (to_pop >= 255) {
-            emit_2_bytes(p, c, OP_POPN, 255);
+        if (c->locals[c->local_count-1].is_captured) {
+            emit_byte(p, c, OP_CLOSE_UPVALUE);
+            c->local_count--;
+            continue;
         }
-        else {
-            emit_2_bytes(p, c, OP_POPN, to_pop);
+        long to_pop = 0;
+        while (c->local_count > 0 && c->locals[c->local_count-1].depth > c->scope_depth && !c->locals[c->local_count-1].is_captured) {
+            to_pop++;
+            c->local_count--;
+        }
+        for (; to_pop > 0; to_pop-=255) {
+            if (to_pop >= 255) {
+                emit_2_bytes(p, c, OP_POPN, 255);
+            }
+            else {
+                emit_2_bytes(p, c, OP_POPN, to_pop);
+            }
         }
     }
 }
@@ -981,6 +990,7 @@ static long resolve_upvalue(parser *p, compiler *c, token *name) {
     if (c->enclosing == NULL) return -1;
     long local  = resolve_local(p, c->enclosing, name);
     if (local != -1) {
+        c->enclosing->locals[local].is_captured = 1;
         return add_upvalue(p, c, (uint32_t) local, 1);
     }
     long upval = resolve_upvalue(p, c->enclosing, name);
@@ -1005,6 +1015,7 @@ static void add_local(parser *p, compiler *c, token name) {
     local *l = &c->locals[c->local_count++];
     l->name = name;
     l->depth = -1;
+    l->is_captured = 0;
 }
 
 static void push_loop_stack(compiler *c, size_t cont_addr, long scope_depth, uint8_t sentinel) {

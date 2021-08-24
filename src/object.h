@@ -60,6 +60,8 @@ struct object_closure {
 struct object_upvalue {
     object obj;
     value *location;
+    value closed;
+    object_upvalue *next;
 };
 
 struct object_string {

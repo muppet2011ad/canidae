@@ -110,6 +110,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_ARRAY_GET_KEEP_REF", offset);
         case OP_ARRAY_SET:
             return simple_instruction("OP_ARRAY_SET", offset);
+        case OP_CLOSE_UPVALUE:
+            return simple_instruction("OP_CLOSE_UPVALUE", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:

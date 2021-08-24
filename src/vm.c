@@ -16,6 +16,7 @@
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
     vm->frame_count = 0;
+    vm->open_upvalues = NULL;
 }
 
 void runtime_error(VM *vm, const char *format, ...) {
@@ -73,11 +74,19 @@ void push(VM *vm, value val) {
         size_t old_capacity = vm->stack_capacity;
         size_t len = STACK_LEN(vm);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
+        value *stack_old = vm->stack;
         vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
         vm->stack_ptr = &(vm->stack[len]);
-        for (size_t i = 0; i < vm->frame_count; i++) {
+        for (size_t i = 0; i < vm->frame_count; i++) { // Moves stack frames to meet the new stack size
             call_frame *frame = &vm->frames[i];
             frame->slots = &(vm->stack[frame->slot_offset]);
+        }
+        object_upvalue *upval = vm->open_upvalues; // We also need to update open upvalues
+        while (upval != NULL) {
+            if (&upval->closed != upval->location) { // If not closed, location must be on the stack
+                upval->location = vm->stack + (upval->location - stack_old); // Calculate new pointer to location on stack
+            }
+            upval = upval->next; // Move onto the next upvalue
         }
     }
     *vm->stack_ptr = val;
@@ -137,8 +146,34 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
 }
 
 static object_upvalue *capture_upvalue(VM *vm, value *local) {
+    object_upvalue *prev_upval = NULL;
+    object_upvalue *upval = vm->open_upvalues;
+    while (upval != NULL && upval->location > local) {
+        prev_upval = upval;
+        upval = upval->next;
+    }
+    if (upval != NULL && upval->location == local) {
+        return upval;
+    }
+
     object_upvalue *created_upvalue = new_upvalue(vm, local);
+    created_upvalue->next = NULL;
+    if (prev_upval == NULL) {
+        vm->open_upvalues = created_upvalue;
+    }
+    else {
+        prev_upval->next = created_upvalue;
+    }
     return created_upvalue;
+}
+
+static void close_upvalues(VM *vm, value *last) {
+    while (vm->open_upvalues != NULL && vm->open_upvalues->location >= last) {
+        object_upvalue *upval = vm->open_upvalues;
+        upval->closed = *upval->location;
+        upval->location = &upval->closed;
+        vm->open_upvalues = upval->next;
+    }
 }
 
 uint8_t is_falsey(value v) {
@@ -317,6 +352,7 @@ static interpret_result run(VM *vm) {
         switch (instruction = READ_BYTE()) {
             case OP_RETURN:{
                 value result = pop(vm);
+                close_upvalues(vm, frame->slots);
                 vm->frame_count--;
                 if (vm->frame_count == 0) {
                     pop(vm);
@@ -428,6 +464,11 @@ static interpret_result run(VM *vm) {
                 object_array *array = allocate_array(vm, values, arr_size);
                 popn(vm, arr_size);
                 push(vm, OBJ_VAL(array));
+                break;
+            }
+            case OP_CLOSE_UPVALUE: {
+                close_upvalues(vm, vm->stack_ptr - 1);
+                pop(vm);
                 break;
             }
             case OP_CONSTANT: {

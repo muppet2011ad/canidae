@@ -23,6 +23,7 @@ typedef struct {
     value *stack_ptr;
     hashmap strings;
     hashmap globals;
+    object_upvalue *open_upvalues;
     object *objects;
 } VM;
 

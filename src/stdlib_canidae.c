@@ -73,6 +73,9 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     return OBJ_VAL(take_string(vm, result, len));
                     #undef APPEND_VAL
                 }
+                default:
+                    runtime_error(vm, "Unprintable object type (how did you even access this?)");
+                    return NATIVE_ERROR_VAL;
             }
             #undef FN_TO_STRING
             break;
@@ -116,9 +119,10 @@ static value num_native(VM *vm, uint8_t argc, value *args) { // Converts to numb
                     return NATIVE_ERROR_VAL;
                 }
             }
+        default:
+            runtime_error(vm, "Failed to convert value to number.");
+            return NATIVE_ERROR_VAL;
     }
-    runtime_error(vm, "Failed to convert value to number.");
-    return NATIVE_ERROR_VAL;
 }
 
 static value int_native(VM *vm, uint8_t argc, value *args) { // Converts to number then rounds, should be given name "int"
