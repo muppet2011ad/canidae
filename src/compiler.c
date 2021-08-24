@@ -141,12 +141,12 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
 }
 
 static void destroy_compiler(compiler *c, VM *vm) {
-    FREE_ARRAY(vm, local, c->locals, c->local_capacity);
+    FREE_ARRAY(NULL, local, c->locals, c->local_capacity);
     for (size_t i = 0; i < c->num_loops; i++) {
         free_loop(c->loops[i]);
     }
-    FREE_ARRAY(vm, loop, c->loops, c->loop_capacity);
-    FREE_ARRAY(vm, upvalue, c->upvalues, c->upvalue_capacity);
+    FREE_ARRAY(NULL, loop, c->loops, c->loop_capacity);
+    FREE_ARRAY(NULL, upvalue, c->upvalues, c->upvalue_capacity);
     init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL, 0);
     free(c->locals);
 }

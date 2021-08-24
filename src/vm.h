@@ -27,6 +27,8 @@ typedef struct VM {
     uint64_t grey_capacity;
     long grey_count;
     object **grey_stack;
+    size_t bytes_allocated;
+    size_t gc_threshold;
     object_upvalue *open_upvalues;
     object *objects;
 } VM;

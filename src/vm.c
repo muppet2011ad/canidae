@@ -51,13 +51,15 @@ void define_native(VM *vm, const char *name, native_function function) {
 
 void init_VM(VM *vm) {
     vm->stack = calloc(STACK_INITIAL, sizeof(value));
+    if (vm->stack == NULL) {
+        fprintf(stderr, "Out of memory.");
+    }
     vm->gc_allowed = 0;
     vm->grey_capacity = 0;
     vm->grey_count = 0;
     vm->grey_stack = NULL;
-    if (vm->stack == NULL) {
-        fprintf(stderr, "Out of memory.");
-    }
+    vm->bytes_allocated = STACK_INITIAL*sizeof(value); // Include initial stack allocation in heap allocation
+    vm->gc_threshold = 16 * 1024; // Arbitrary threshold
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
     init_hashmap(&vm->strings);

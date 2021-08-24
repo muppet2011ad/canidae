@@ -5,10 +5,20 @@
 #include "object.h"
 #include "debug.h"
 
+#define GC_HEAP_GROW_FACTOR 2
+
 void *reallocate(VM *vm, void *ptr, size_t old_size, size_t new_size) {
+    if (vm != NULL) {
+        vm->bytes_allocated += new_size - old_size;
+    }
     #ifdef DEBUG_STRESS_GC
         if (vm != NULL && new_size > old_size) collect_garbage(vm);
+    #else
+        if (vm != NULL && vm->gc_allowed && vm->bytes_allocated > vm->gc_threshold && new_size > old_size) {
+            collect_garbage(vm);
+        }
     #endif
+    
     if (new_size == 0) {
         free(ptr);
         return NULL;
@@ -173,6 +183,7 @@ void collect_garbage(VM *vm) {
     }
     #ifdef DEBUG_LOG_GC
         printf("-- gc begin\n");
+        size_t before = vm->bytes_allocated;
     #endif
 
     mark_roots(vm);
@@ -180,8 +191,12 @@ void collect_garbage(VM *vm) {
     hashmap_remove_white(vm, &vm->strings);
     sweep(vm);
 
+    vm->gc_threshold = vm->bytes_allocated * GC_HEAP_GROW_FACTOR;
+
     #ifdef DEBUG_LOG_GC
         printf("-- gc end\n");
+        printf("   collected %zu bytes (from %zu to %zu) next at %zu\n",
+            before - vm->bytes_allocated, before, vm->bytes_allocated, vm->gc_threshold);
     #endif
 }
 

@@ -80,7 +80,7 @@ object_string *take_string(VM *vm, char *chars, size_t length) {
     uint32_t hash = hash_string(chars, length);
     object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
     if (interned != NULL) {
-        FREE_ARRAY(vm, char, chars, length + 1);
+        FREE_ARRAY(NULL, char, chars, length + 1);
         return interned;
     }
     return allocate_string(vm, chars, length, hash);
