@@ -23,6 +23,7 @@ typedef struct VM {
     value *stack_ptr;
     hashmap strings;
     hashmap globals;
+    uint8_t gc_allowed;
     object_upvalue *open_upvalues;
     object *objects;
 } VM;
@@ -42,5 +43,7 @@ value popn(VM *vm, size_t n);
 void define_native(VM *vm, const char *name, value (*function)(VM *vm, uint8_t argc, value *argv) );
 void runtime_error(VM *vm, const char *format, ...);
 uint8_t is_falsey(value v);
+inline void enable_gc(VM *vm);
+inline void disable_gc(VM *vm);
 
 #endif

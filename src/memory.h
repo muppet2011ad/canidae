@@ -20,6 +20,8 @@
     (type*)reallocate(vm, NULL, 0, sizeof(type) * (count))
 
 void *reallocate(VM *vm, void *ptr, size_t old_size, size_t new_size);
+void mark_value(value val);
+void mark_object(object *obj);
 void collect_garbage(VM *vm);
 void free_objects(VM *vm, object *objects);
 

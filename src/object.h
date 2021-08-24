@@ -34,6 +34,7 @@ typedef value (*native_function)(VM *vm, uint8_t argc, value *argv);
 
 struct object {
     object_type type;
+    uint8_t is_marked;
     struct object *next;
 };
 

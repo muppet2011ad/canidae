@@ -22,6 +22,20 @@ void *reallocate(VM *vm, void *ptr, size_t old_size, size_t new_size) {
     return result;
 }
 
+void mark_object(object *obj) {
+    if (obj == NULL) return;
+    #ifdef DEBUG_LOG_GC
+        printf("%p mark ", (void*)obj);
+        print_value(OBJ_VAL(obj));
+        printf("\n");
+    #endif
+    obj->is_marked = 1;
+}
+
+void mark_value(value val) {
+    if (IS_OBJ(val)) mark_object(AS_OBJ(val));
+}
+
 static void free_object(VM *vm, object *obj) {
     #ifdef DEBUG_LOG_GC
         printf("%p free type %d\n", (void*) obj, obj->type);
@@ -62,10 +76,31 @@ static void free_object(VM *vm, object *obj) {
     }
 }
 
+static void mark_roots(VM *vm) {
+    for (value *slot = vm->stack; slot < vm->stack_ptr; slot++) { // Mark stack
+        mark_value(*slot);
+    }
+    mark_hashmap(&vm->globals); // Mark global variables
+    mark_hashmap(&vm->strings); // Mark interned strings
+
+    for (uint16_t i = 0; i < vm->frame_count; i++) { // Mark closures on call stack
+        mark_object((object*)vm->frames[i].closure);
+    }
+
+    for (object_upvalue *upval = vm->open_upvalues; upval != NULL; upval = upval->next) { // Mark upvalues
+        mark_object((object*)upval);
+    }
+}
+
 void collect_garbage(VM *vm) {
+    if (!vm->gc_allowed) {
+        return;
+    }
     #ifdef DEBUG_LOG_GC
         printf("-- gc begin\n");
     #endif
+
+    mark_roots(vm);
 
     #ifdef DEBUG_LOG_GC
         printf("-- gc end\n");

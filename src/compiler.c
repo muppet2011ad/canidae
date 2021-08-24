@@ -1132,6 +1132,7 @@ object_function *compile(const char* source, VM *vm) {
     init_scanner(&s, source);
     init_parser(&p, &s);
     init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL);
+    disable_gc(vm);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {
         declaration(&p, &c, vm);
@@ -1139,5 +1140,6 @@ object_function *compile(const char* source, VM *vm) {
     consume(&p, TOKEN_EOF, "Expect end of expression.");
     object_function *f = end_compiler(&p, &c);
     destroy_compiler(&c, vm);
+    enable_gc(vm);
     return p.had_error ? NULL : f;
 }

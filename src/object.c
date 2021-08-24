@@ -10,6 +10,7 @@
 
 static object *allocate_object(VM* vm, size_t size, object_type type) {
     object *obj = reallocate(vm, NULL, 0, size);
+    obj->is_marked = 0;
     obj->type = type;
     obj->next = vm->objects;
     vm->objects = obj;
