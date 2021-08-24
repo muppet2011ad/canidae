@@ -1,0 +1,19 @@
+{
+    function outer() {
+        let x = 0;
+
+        function setter(val) {
+            x = val;
+        }
+
+        function getter() {
+            print x;
+        }
+
+        getter();
+        setter(42);
+        getter();
+    }
+
+    outer();
+}
