@@ -50,7 +50,8 @@ typedef enum {
     OP_JUMP_IF_TRUE,
     OP_JUMP,
     OP_LOOP,
-    // Seven-byte operand
+    // Variable-length operand
+    OP_CLOSURE,
 } opcode;
 
 typedef struct {

@@ -135,6 +135,15 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return jump_instruction("OP_JUMP", s, 1, offset);
         case OP_LOOP:
             return jump_instruction("OP_LOOP", s, -1, offset);
+        case OP_CLOSURE: {
+            offset++;
+            uint32_t constant = ((uint32_t) s->bytecode[offset] << 16) + ((uint32_t) s->bytecode[offset+1] << 8) + ((uint32_t) s->bytecode[offset+2]);
+            offset += 3;
+            printf("%-16s %5u ", "OP_CLOSURE", constant);
+            print_value(s->constants.values[constant]);
+            printf("\n");
+            return offset;
+        }
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

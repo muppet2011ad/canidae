@@ -51,6 +51,7 @@ typedef struct compiler {
     size_t loop_capacity;
     object_function *function;
     function_type type;
+    struct compiler *enclosing;
 } compiler;
 
 typedef enum {
@@ -107,6 +108,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->locals = NULL;
     c->loops = NULL;
     c->function = NULL;
+    c->enclosing = NULL;
     c->type = type;
     c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
@@ -609,6 +611,7 @@ static void block(parser *p, compiler *c, VM *vm) {
 static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
     init_compiler(p, &function_compiler, vm, type, &p->prev);
+    function_compiler.enclosing = c;
     begin_scope(&function_compiler);
     mark_initialised(&function_compiler);
     consume(p, TOKEN_LEFT_PAREN, "Expect '(' after function name.");
@@ -627,7 +630,9 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     block(p, &function_compiler, vm);
     object_function *function = end_compiler(p, &function_compiler);
     destroy_compiler(&function_compiler, vm);
-    emit_2_bytes(p, c, OP_CONSTANT, make_constant(p, c, OBJ_VAL(function)));
+    uint32_t constant = make_constant(p, c, OBJ_VAL(function));
+    uint8_t bytes[4] = {OP_CLOSURE, constant >> 16, constant >> 8, constant};
+    emit_bytes(p, c, bytes, 4);
 }
 
 static void function_declaration(parser *p, compiler *c, VM *vm) {

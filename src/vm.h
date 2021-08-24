@@ -9,7 +9,7 @@
 #define FRAMES_MAX 1024
 
 typedef struct {
-    object_function *function;
+    object_closure *closure;
     uint8_t *ip;
     value *slots;
     size_t slot_offset;
