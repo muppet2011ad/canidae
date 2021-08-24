@@ -44,6 +44,7 @@ struct object_native {
 struct object_function {
     object obj;
     uint8_t arity;
+    uint32_t upvalue_count;
     segment seg;
     object_string *name;
 };
