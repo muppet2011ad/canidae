@@ -5,7 +5,7 @@
 #include "segment.h"
 #include "hashmap.h"
 
-#define STACK_INITIAL 4
+#define STACK_INITIAL 256
 #define FRAMES_MAX 1024
 
 typedef struct {
@@ -24,6 +24,9 @@ typedef struct VM {
     hashmap strings;
     hashmap globals;
     uint8_t gc_allowed;
+    uint64_t grey_capacity;
+    long grey_count;
+    object **grey_stack;
     object_upvalue *open_upvalues;
     object *objects;
 } VM;
@@ -43,7 +46,7 @@ value popn(VM *vm, size_t n);
 void define_native(VM *vm, const char *name, value (*function)(VM *vm, uint8_t argc, value *argv) );
 void runtime_error(VM *vm, const char *format, ...);
 uint8_t is_falsey(value v);
-inline void enable_gc(VM *vm);
-inline void disable_gc(VM *vm);
+void enable_gc(VM *vm);
+void disable_gc(VM *vm);
 
 #endif

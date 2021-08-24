@@ -107,6 +107,7 @@ static void print_function(object_function *f) {
 
 object_array *allocate_array(VM *vm, value *values, size_t length) {
     object_array *array = ALLOCATE_OBJ(vm, object_array, OBJ_ARRAY);
+    push(vm, OBJ_VAL(array));
     init_value_array(&array->arr);
     array->arr.values = values;
     array->arr.len = length;
@@ -117,6 +118,7 @@ object_array *allocate_array(VM *vm, value *values, size_t length) {
     }
     array->arr.values = GROW_ARRAY(vm, value, array->arr.values, length, pow);
     array->arr.capacity = pow;
+    pop(vm);
     return array;
 }
 

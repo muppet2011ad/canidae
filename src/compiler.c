@@ -109,7 +109,7 @@ static long resolve_upvalue(parser *p, compiler *c, token *name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
 
-static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id) {
+static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id, uint8_t make_function) {
     c->local_count = 0;
     c->local_capacity = 0;
     c->scope_depth = 0;
@@ -123,7 +123,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->upvalue_capacity = 0;
     c->upvalue_count = 0;
     c->upvalues = NULL;
-    c->function = new_function(vm);
+    if (make_function) c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
     if (id) {
         t = *id;
@@ -147,7 +147,7 @@ static void destroy_compiler(compiler *c, VM *vm) {
     }
     FREE_ARRAY(vm, loop, c->loops, c->loop_capacity);
     FREE_ARRAY(vm, upvalue, c->upvalues, c->upvalue_capacity);
-    init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL);
+    init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL, 0);
     free(c->locals);
 }
 
@@ -638,7 +638,7 @@ static void block(parser *p, compiler *c, VM *vm) {
 
 static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
-    init_compiler(p, &function_compiler, vm, type, &p->prev);
+    init_compiler(p, &function_compiler, vm, type, &p->prev, 1);
     function_compiler.enclosing = c;
     begin_scope(&function_compiler);
     mark_initialised(&function_compiler);
@@ -1131,7 +1131,7 @@ object_function *compile(const char* source, VM *vm) {
     compiler c;
     init_scanner(&s, source);
     init_parser(&p, &s);
-    init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL);
+    init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL, 1);
     disable_gc(vm);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {

@@ -22,23 +22,33 @@ void *reallocate(VM *vm, void *ptr, size_t old_size, size_t new_size) {
     return result;
 }
 
-void mark_object(object *obj) {
-    if (obj == NULL) return;
+void mark_object(VM *vm, object *obj) {
+    if (obj == NULL || obj->is_marked) return;
     #ifdef DEBUG_LOG_GC
         printf("%p mark ", (void*)obj);
         print_value(OBJ_VAL(obj));
         printf("\n");
     #endif
     obj->is_marked = 1;
+
+    if (vm->grey_capacity < vm->grey_count + 1) {
+        vm->grey_capacity = GROW_CAPACITY(vm->grey_capacity);
+        vm->grey_stack = (object**)realloc(vm->grey_stack, sizeof(object*) * vm->grey_capacity);
+        if (vm->grey_stack == NULL) exit(1);
+    }
+
+    vm->grey_stack[vm->grey_count++] = obj;
 }
 
-void mark_value(value val) {
-    if (IS_OBJ(val)) mark_object(AS_OBJ(val));
+void mark_value(VM *vm, value val) {
+    if (IS_OBJ(val)) mark_object(vm, AS_OBJ(val));
 }
 
 static void free_object(VM *vm, object *obj) {
     #ifdef DEBUG_LOG_GC
-        printf("%p free type %d\n", (void*) obj, obj->type);
+        printf("%p free type %d (", (void*) obj, obj->type);
+        print_value(OBJ_VAL(obj));
+        printf(")\n");
     #endif
     switch (obj->type) {
         case OBJ_STRING: {
@@ -78,17 +88,83 @@ static void free_object(VM *vm, object *obj) {
 
 static void mark_roots(VM *vm) {
     for (value *slot = vm->stack; slot < vm->stack_ptr; slot++) { // Mark stack
-        mark_value(*slot);
+        mark_value(vm, *slot);
     }
-    mark_hashmap(&vm->globals); // Mark global variables
-    mark_hashmap(&vm->strings); // Mark interned strings
+    mark_hashmap(vm, &vm->globals); // Mark global variables
+    mark_hashmap(vm, &vm->strings); // Mark interned strings
 
     for (uint16_t i = 0; i < vm->frame_count; i++) { // Mark closures on call stack
-        mark_object((object*)vm->frames[i].closure);
+        mark_object(vm, (object*)vm->frames[i].closure);
     }
 
     for (object_upvalue *upval = vm->open_upvalues; upval != NULL; upval = upval->next) { // Mark upvalues
-        mark_object((object*)upval);
+        mark_object(vm, (object*)upval);
+    }
+}
+
+static void mark_array(VM *vm, value_array *arr) {
+    for (size_t i = 0; i < arr->len; i++) {
+        mark_value(vm, arr->values[i]);
+    }
+}
+
+static void blacken_object(VM *vm, object *obj) {
+    #ifdef DEBUG_LOG_GC
+        printf("%p blacken ", (void*)obj);
+        print_value(OBJ_VAL(obj));
+        printf("\n");
+    #endif
+    switch (obj->type) {
+        case OBJ_UPVALUE:
+            mark_value(vm, ((object_upvalue*)obj)->closed);
+            break;
+        case OBJ_FUNCTION: {
+            object_function *function = (object_function*) obj;
+            mark_object(vm, (object*) function->name);
+            mark_array(vm, &function->seg.constants);
+            break;
+        }
+        case OBJ_CLOSURE: {
+            object_closure *closure = (object_closure*) obj;
+            mark_object(vm, (object*) closure->function);
+            for (uint32_t i = 0; i < closure->upvalue_count; i++) {
+                mark_object(vm, (object*) closure->upvalues[i]);
+            }
+            break;
+        }
+        case OBJ_ARRAY: {
+            object_array *array = (object_array*) obj;
+            mark_array(vm, &array->arr);
+        }
+        case OBJ_NATIVE:
+        case OBJ_STRING:
+            break;
+    }
+}
+
+static void trace_references(VM *vm) {
+    while (vm->grey_count > 0) {
+        object *obj = vm->grey_stack[--vm->grey_count];
+        blacken_object(vm, obj);
+    }
+}
+
+static void sweep(VM *vm) {
+    object *prev = NULL;
+    object *obj = vm->objects;
+    while (obj != NULL) {
+        if (obj->is_marked) {
+            obj->is_marked = 0;
+            prev = obj;
+            obj = obj->next;
+        }
+        else {
+            object *unmarked = obj;
+            obj = obj->next;
+            if (prev != NULL) prev->next = obj;
+            else vm->objects = obj;
+            free_object(vm, unmarked);
+        }
     }
 }
 
@@ -101,6 +177,8 @@ void collect_garbage(VM *vm) {
     #endif
 
     mark_roots(vm);
+    trace_references(vm);
+    sweep(vm);
 
     #ifdef DEBUG_LOG_GC
         printf("-- gc end\n");

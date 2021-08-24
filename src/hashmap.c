@@ -117,10 +117,10 @@ object_string *hashmap_find_string(hashmap *h, const char *chars, uint32_t lengt
     }
 }
 
-void mark_hashmap(hashmap *h) {
+void mark_hashmap(VM *vm, hashmap *h) {
     for (uint32_t i = 0; i < h->capacity; i++) {
         kv_pair *entry = &h->entries[i];
-        mark_object((object*)entry->k);
-        mark_value(entry->v);
+        mark_object(vm, (object*)entry->k);
+        mark_value(vm, entry->v);
     }
 }

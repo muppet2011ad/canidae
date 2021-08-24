@@ -52,6 +52,9 @@ void define_native(VM *vm, const char *name, native_function function) {
 void init_VM(VM *vm) {
     vm->stack = calloc(STACK_INITIAL, sizeof(value));
     vm->gc_allowed = 0;
+    vm->grey_capacity = 0;
+    vm->grey_count = 0;
+    vm->grey_stack = NULL;
     if (vm->stack == NULL) {
         fprintf(stderr, "Out of memory.");
     }
@@ -68,6 +71,7 @@ void destroy_VM(VM *vm) {
     destroy_hashmap(&vm->globals, vm);
     free_objects(vm, vm->objects);
     free(vm->stack);
+    free(vm->grey_stack);
 }
 
 void enable_gc(VM *vm) {
@@ -80,6 +84,7 @@ void disable_gc(VM *vm) {
 
 void push(VM *vm, value val) {
     if (STACK_LEN(vm) >= vm->stack_capacity) {
+        disable_gc(vm);
         size_t old_capacity = vm->stack_capacity;
         size_t len = STACK_LEN(vm);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
@@ -97,6 +102,7 @@ void push(VM *vm, value val) {
             }
             upval = upval->next; // Move onto the next upvalue
         }
+        enable_gc(vm);
     }
     *vm->stack_ptr = val;
     vm->stack_ptr++;
