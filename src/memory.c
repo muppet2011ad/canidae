@@ -91,7 +91,6 @@ static void mark_roots(VM *vm) {
         mark_value(vm, *slot);
     }
     mark_hashmap(vm, &vm->globals); // Mark global variables
-    mark_hashmap(vm, &vm->strings); // Mark interned strings
 
     for (uint16_t i = 0; i < vm->frame_count; i++) { // Mark closures on call stack
         mark_object(vm, (object*)vm->frames[i].closure);
@@ -178,6 +177,7 @@ void collect_garbage(VM *vm) {
 
     mark_roots(vm);
     trace_references(vm);
+    hashmap_remove_white(vm, &vm->strings);
     sweep(vm);
 
     #ifdef DEBUG_LOG_GC

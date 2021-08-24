@@ -124,3 +124,12 @@ void mark_hashmap(VM *vm, hashmap *h) {
         mark_value(vm, entry->v);
     }
 }
+
+void hashmap_remove_white(VM *vm, hashmap *h) {
+    for (uint32_t i = 0; i < h->capacity; i++) {
+        kv_pair *entry = &h->entries[i];
+        if (entry->k != NULL && entry->k->obj.is_marked) {
+            hashmap_delete(h, entry->k);
+        }
+    }
+}

@@ -27,5 +27,6 @@ uint8_t hashmap_delete(hashmap *h, object_string *key);
 void hashmap_copy_all(VM *vm, hashmap *from, hashmap *to);
 object_string *hashmap_find_string(hashmap *h, const char *chars, uint32_t length, uint32_t hash);
 void mark_hashmap(VM *vm, hashmap *h);
+void hashmap_remove_white(VM *vm, hashmap *h);
 
 #endif
