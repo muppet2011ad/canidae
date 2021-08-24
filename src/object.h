@@ -27,6 +27,7 @@ typedef enum {
     OBJ_FUNCTION,
     OBJ_NATIVE,
     OBJ_CLOSURE,
+    OBJ_UPVALUE,
 } object_type;
 
 typedef value (*native_function)(VM *vm, uint8_t argc, value *argv);
@@ -52,6 +53,13 @@ struct object_function {
 struct object_closure {
     object obj;
     object_function *function;
+    object_upvalue **upvalues;
+    uint32_t upvalue_count;
+};
+
+struct object_upvalue {
+    object obj;
+    value *location;
 };
 
 struct object_string {
@@ -69,6 +77,7 @@ struct object_array {
 object_native *new_native(VM *vm, native_function function);
 object_function *new_function(VM *vm);
 object_closure *new_closure(VM *vm, object_function *function);
+object_upvalue *new_upvalue(VM *vm, value *slot);
 object_string *take_string(VM *vm, char *chars, size_t length);
 object_string *copy_string(VM *vm, const char *chars, size_t length);
 object_array *allocate_array(VM *vm, value *values, size_t length);

@@ -43,7 +43,13 @@ static void free_object(object *obj) {
             break;
         }
         case OBJ_CLOSURE: {
+            object_closure *closure = (object_closure*) obj;
+            FREE_ARRAY(object_upvalue*, closure->upvalues, closure->upvalue_count);
             FREE(object_closure, obj);
+            break;
+        }
+        case OBJ_UPVALUE: {
+            FREE(object_upvalue, obj);
             break;
         }
     }

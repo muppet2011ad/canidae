@@ -136,6 +136,11 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
     return 0;
 }
 
+static object_upvalue *capture_upvalue(VM *vm, value *local) {
+    object_upvalue *created_upvalue = new_upvalue(vm, local);
+    return created_upvalue;
+}
+
 uint8_t is_falsey(value v) {
     return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0);
 }
@@ -478,6 +483,16 @@ static interpret_result run(VM *vm) {
                 frame->slots[arg] = peek(vm, 0);
                 break;
             }
+            case OP_GET_UPVALUE: {
+                uint32_t slot = READ_UINT24();
+                push(vm, *frame->closure->upvalues[slot]->location);
+                break;
+            }
+            case OP_SET_UPVALUE: {
+                uint32_t slot = READ_UINT24();
+                *frame->closure->upvalues[slot]->location = peek(vm, 0);
+                break;
+            }
             case OP_CONSTANT_LONG: {
                 value constant = READ_CONSTANT_LONG();
                 push(vm, constant);
@@ -507,6 +522,16 @@ static interpret_result run(VM *vm) {
                 object_function *function = AS_FUNCTION(READ_CONSTANT_LONG());
                 object_closure *closure = new_closure(vm, function);
                 push(vm, OBJ_VAL(closure));
+                for (uint32_t i = 0; i < closure->upvalue_count; i++) {
+                    uint8_t is_local = READ_BYTE();
+                    uint32_t index = READ_UINT24();
+                    if (is_local) {
+                        closure->upvalues[i] = capture_upvalue(vm, frame->slots + index);
+                    }
+                    else {
+                        closure->upvalues[i] = frame->closure->upvalues[index];
+                    }
+                }
                 break;
             }
         }
