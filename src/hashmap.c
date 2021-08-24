@@ -13,8 +13,8 @@ void init_hashmap(hashmap *h) {
     h->entries = NULL;
 }
 
-void destroy_hashmap(hashmap *h) {
-    FREE_ARRAY(kv_pair, h->entries, h->capacity);
+void destroy_hashmap(hashmap *h, VM *vm) {
+    FREE_ARRAY(vm, kv_pair, h->entries, h->capacity);
     init_hashmap(h);
 }
 
@@ -38,8 +38,8 @@ static kv_pair *find_entry(kv_pair *entries, uint32_t capacity, object_string *k
     }
 }
 
-static void adjust_capacity(hashmap *h, uint32_t capacity) {
-    kv_pair *entries = ALLOCATE(kv_pair, capacity);
+static void adjust_capacity(hashmap *h, VM *vm, uint32_t capacity) {
+    kv_pair *entries = ALLOCATE(vm, kv_pair, capacity);
     for (uint32_t i = 0; i < capacity; i++) {
         entries[i].k = NULL;
         entries[i].v = NULL_VAL;
@@ -54,15 +54,15 @@ static void adjust_capacity(hashmap *h, uint32_t capacity) {
         dest->v = entry->v;
         h->count++;
     }
-    FREE_ARRAY(kv_pair, h->entries, h->capacity);
+    FREE_ARRAY(vm, kv_pair, h->entries, h->capacity);
     h->entries = entries;
     h->capacity = capacity;
 }
 
-uint8_t hashmap_set(hashmap *h, object_string *key, value val) {
+uint8_t hashmap_set(hashmap *h, VM *vm, object_string *key, value val) {
     if (h->count + 1 > h->capacity * MAX_HASHMAP_LOAD_FACTOR) {
         uint32_t capacity = GROW_CAPACITY(h->capacity);
-        adjust_capacity(h, capacity);
+        adjust_capacity(h, vm, capacity);
     } 
     kv_pair *entry = find_entry(h->entries, h->capacity, key);
     uint8_t is_new_key = entry->k == NULL;
@@ -91,11 +91,11 @@ uint8_t hashmap_delete(hashmap *h, object_string *key) {
     return 1;
 }
 
-void hashmap_copy_all(hashmap *from, hashmap *to) {
+void hashmap_copy_all(VM *vm, hashmap *from, hashmap *to) {
     for (uint32_t i = 0; i < from->capacity; i++) {
         kv_pair *entry = &from->entries[i];
         if (entry->k != NULL) {
-            hashmap_set(to, entry->k, entry->v);
+            hashmap_set(to, vm, entry->k, entry->v);
         }
     }
 }

@@ -15,7 +15,7 @@ typedef struct {
     size_t slot_offset;
 } call_frame;
 
-typedef struct {
+typedef struct VM {
     call_frame frames[FRAMES_MAX];
     uint16_t frame_count;
     value *stack;

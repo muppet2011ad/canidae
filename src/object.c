@@ -9,10 +9,15 @@
     (type*) allocate_object(vm, sizeof(type), obj_type);
 
 static object *allocate_object(VM* vm, size_t size, object_type type) {
-    object *obj = reallocate(NULL, 0, size);
+    object *obj = reallocate(vm, NULL, 0, size);
     obj->type = type;
     obj->next = vm->objects;
     vm->objects = obj;
+
+    #ifdef DEBUG_LOG_GC
+        printf("%p allocate %zu for %d\n", (void*) obj, size, type);
+    #endif
+
     return obj;
 }
 
@@ -25,7 +30,7 @@ object_function *new_function(VM *vm) {
 }
 
 object_closure *new_closure(VM *vm, object_function *function) {
-    object_upvalue **upvalues = ALLOCATE(object_upvalue*, function->upvalue_count);
+    object_upvalue **upvalues = ALLOCATE(vm, object_upvalue*, function->upvalue_count);
     for (uint32_t i = 0; i < function->upvalue_count; i++) {
         upvalues[i] = NULL;
     }
@@ -56,7 +61,7 @@ static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32
     string->chars = chars;
     string->hash = hash;
     push(vm, OBJ_VAL(string));
-    hashmap_set(&vm->strings, string, NULL_VAL);
+    hashmap_set(&vm->strings, vm, string, NULL_VAL);
     pop(vm);
     return string;
 }
@@ -74,7 +79,7 @@ object_string *take_string(VM *vm, char *chars, size_t length) {
     uint32_t hash = hash_string(chars, length);
     object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
     if (interned != NULL) {
-        FREE_ARRAY(char, chars, length + 1);
+        FREE_ARRAY(vm, char, chars, length + 1);
         return interned;
     }
     return allocate_string(vm, chars, length, hash);
@@ -84,7 +89,7 @@ object_string *copy_string(VM *vm, const char *chars, size_t length) {
     uint32_t hash = hash_string(chars, length);
     object_string *interned = hashmap_find_string(&vm->strings, chars, length, hash);
     if (interned != NULL) return interned;
-    char *new_string = ALLOCATE(char, length + 1);
+    char *new_string = ALLOCATE(vm, char, length + 1);
     memcpy(new_string, chars, length);
     new_string[length] = '\0';
     return allocate_string(vm, new_string, length, hash);
@@ -109,7 +114,7 @@ object_array *allocate_array(VM *vm, value *values, size_t length) {
     while (pow < array->arr.len) {
         pow *= 2;
     }
-    array->arr.values = GROW_ARRAY(value, array->arr.values, length, pow);
+    array->arr.values = GROW_ARRAY(vm, value, array->arr.values, length, pow);
     array->arr.capacity = pow;
     return array;
 }
@@ -119,7 +124,7 @@ void array_set(VM *vm, object_array *arr, size_t index, value val) {
     while (index >= arr->arr.capacity) {
         size_t oldc = arr->arr.capacity;
         arr->arr.capacity = GROW_CAPACITY(arr->arr.capacity);
-        arr->arr.values = GROW_ARRAY(value, arr->arr.values, oldc, arr->arr.capacity);
+        arr->arr.values = GROW_ARRAY(vm, value, arr->arr.values, oldc, arr->arr.capacity);
         for (size_t i = oldc; i < arr->arr.capacity; i++) {
             arr->arr.values[i] = NULL_VAL;
         }

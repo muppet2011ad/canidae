@@ -45,7 +45,7 @@ void runtime_error(VM *vm, const char *format, ...) {
 void define_native(VM *vm, const char *name, native_function function) {
     push(vm, OBJ_VAL(copy_string(vm, name, strlen(name))));
     push(vm, OBJ_VAL(new_native(vm, function)));
-    hashmap_set(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+    hashmap_set(&vm->globals, vm, AS_STRING(vm->stack[0]), vm->stack[1]);
     popn(vm, 2);
 }
 
@@ -63,9 +63,9 @@ void init_VM(VM *vm) {
 }
 
 void destroy_VM(VM *vm) {
-    destroy_hashmap(&vm->strings);
-    destroy_hashmap(&vm->globals);
-    free_objects(vm->objects);
+    destroy_hashmap(&vm->strings, vm);
+    destroy_hashmap(&vm->globals, vm);
+    free_objects(vm, vm->objects);
     free(vm->stack);
 }
 
@@ -75,7 +75,7 @@ void push(VM *vm, value val) {
         size_t len = STACK_LEN(vm);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
         value *stack_old = vm->stack;
-        vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
+        vm->stack = GROW_ARRAY(vm, value, vm->stack, old_capacity, vm->stack_capacity);
         vm->stack_ptr = &(vm->stack[len]);
         for (size_t i = 0; i < vm->frame_count; i++) { // Moves stack frames to meet the new stack size
             call_frame *frame = &vm->frames[i];
@@ -190,7 +190,7 @@ static uint8_t concatenate(VM *vm) {
                 runtime_error(vm, "String concatenation results in string larger than max string size.");
                 return INTERPRET_RUNTIME_ERROR;
             }
-            char *chars = ALLOCATE(char, len + 1);
+            char *chars = ALLOCATE(vm, char, len + 1);
             memcpy(chars, a->chars, a->length);
             memcpy(chars + a->length, b->chars, b->length);
             chars[len] = '\0';
@@ -491,7 +491,7 @@ static interpret_result run(VM *vm) {
             }
             case OP_DEFINE_GLOBAL: {
                 object_string *name = READ_STRING();
-                hashmap_set(&vm->globals, name, peek(vm, 0));
+                hashmap_set(&vm->globals, vm, name, peek(vm, 0));
                 pop(vm);
                 break;
             }
@@ -507,7 +507,7 @@ static interpret_result run(VM *vm) {
             }
             case OP_SET_GLOBAL: {
                 object_string *name = READ_STRING();
-                if(hashmap_set(&vm->globals, name, peek(vm, 0))) {
+                if(hashmap_set(&vm->globals, vm, name, peek(vm, 0))) {
                     hashmap_delete(&vm->globals, name);
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;
