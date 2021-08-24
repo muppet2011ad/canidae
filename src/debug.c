@@ -2,6 +2,7 @@
 
 #include "debug.h"
 #include "value.h"
+#include "object.h"
 
 void disassemble_segment(segment *s, const char *name) {
     printf("==== %s ====\n", name);
@@ -109,6 +110,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_ARRAY_GET_KEEP_REF", offset);
         case OP_ARRAY_SET:
             return simple_instruction("OP_ARRAY_SET", offset);
+        case OP_CLOSE_UPVALUE:
+            return simple_instruction("OP_CLOSE_UPVALUE", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
@@ -125,6 +128,10 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return three_byte_instruction("OP_GET_LOCAL", s, offset);
         case OP_SET_LOCAL:
             return three_byte_instruction("OP_SET_LOCAL", s, offset);
+        case OP_GET_UPVALUE:
+            return three_byte_instruction("OP_GET_UPVALUE", s, offset);
+        case OP_SET_UPVALUE:
+            return three_byte_instruction("OP_SET_UPVALUE", s, offset);
         case OP_CONSTANT_LONG:
             return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
         case OP_JUMP_IF_FALSE:
@@ -135,6 +142,23 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return jump_instruction("OP_JUMP", s, 1, offset);
         case OP_LOOP:
             return jump_instruction("OP_LOOP", s, -1, offset);
+        case OP_CLOSURE: {
+            offset++;
+            uint32_t constant = ((uint32_t) s->bytecode[offset] << 16) + ((uint32_t) s->bytecode[offset+1] << 8) + ((uint32_t) s->bytecode[offset+2]);
+            offset += 3;
+            printf("%-16s %5u ", "OP_CLOSURE", constant);
+            print_value(s->constants.values[constant]);
+            printf("\n");
+
+            object_function *function = AS_FUNCTION(s->constants.values[constant]);
+            for (uint32_t j = 0; j < function->upvalue_count; j++) {
+                uint8_t is_local = s->bytecode[offset++];
+                uint32_t index = ((uint32_t) s->bytecode[offset] << 16) + ((uint32_t) s->bytecode[offset+1] << 8) + ((uint32_t) s->bytecode[offset+2]);
+                offset += 3;
+                printf("%08lu    |                      %s %u\n", offset - 4, is_local ? "local" : "upvalue", index);
+            }
+            return offset;
+        }
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

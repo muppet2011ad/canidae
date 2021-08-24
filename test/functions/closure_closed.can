@@ -1,0 +1,20 @@
+{
+    function make_printer(string) {
+        let text = string;
+        function printme() {
+            print text;
+        }
+        function set_text(string) {
+            text = string;
+        }
+        return [printme, set_text];
+    }
+
+    let functions = make_printer("Hello, World!");
+    let printer = functions[0];
+    let set_text = functions[1];
+    let x = [1, 2, 3, 4, 5]; // This should overwrite the stack spaces where the upvalues used to be, to make sure we're not just reading what was left over
+    printer();
+    set_text("Assignment is behaving as you'd expect.");
+    printer();
+}

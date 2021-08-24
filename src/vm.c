@@ -16,6 +16,7 @@
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
     vm->frame_count = 0;
+    vm->open_upvalues = NULL;
 }
 
 void runtime_error(VM *vm, const char *format, ...) {
@@ -27,7 +28,7 @@ void runtime_error(VM *vm, const char *format, ...) {
 
     for (int32_t i = vm->frame_count - 1; i >= 0; i--) {
         call_frame *frame = &vm->frames[i];
-        object_function *function = frame->function;
+        object_function *function = frame->closure->function;
         size_t instruction = frame->ip - function->seg.bytecode - 1;
         fprintf(stderr, "[line %u] in ", function->seg.lines[instruction]);
         if (function->name == NULL) {
@@ -73,11 +74,19 @@ void push(VM *vm, value val) {
         size_t old_capacity = vm->stack_capacity;
         size_t len = STACK_LEN(vm);
         vm->stack_capacity = GROW_CAPACITY(old_capacity);
+        value *stack_old = vm->stack;
         vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
         vm->stack_ptr = &(vm->stack[len]);
-        for (size_t i = 0; i < vm->frame_count; i++) {
+        for (size_t i = 0; i < vm->frame_count; i++) { // Moves stack frames to meet the new stack size
             call_frame *frame = &vm->frames[i];
             frame->slots = &(vm->stack[frame->slot_offset]);
+        }
+        object_upvalue *upval = vm->open_upvalues; // We also need to update open upvalues
+        while (upval != NULL) {
+            if (&upval->closed != upval->location) { // If not closed, location must be on the stack
+                upval->location = vm->stack + (upval->location - stack_old); // Calculate new pointer to location on stack
+            }
+            upval = upval->next; // Move onto the next upvalue
         }
     }
     *vm->stack_ptr = val;
@@ -98,9 +107,9 @@ static value peek(VM *vm, int distance) {
     return vm->stack_ptr[-1 - distance];
 }
 
-static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
-    if (argc != function->arity) {
-        runtime_error(vm, "Function '%s' expects %u arguments (got %u).", function->name->chars, function->arity, argc);
+static uint8_t call(VM *vm, object_closure *closure, uint8_t argc) {
+    if (argc != closure->function->arity) {
+        runtime_error(vm, "Function '%s' expects %u arguments (got %u).", closure->function->name->chars, closure->function->arity, argc);
         return 0;
     }
     if (vm->frame_count == FRAMES_MAX) {
@@ -108,8 +117,8 @@ static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
         return 0;
     }
     call_frame *frame = &vm->frames[vm->frame_count++];
-    frame->function = function;
-    frame->ip = function->seg.bytecode;
+    frame->closure = closure;
+    frame->ip = closure->function->seg.bytecode;
     frame->slots = vm->stack_ptr - argc - 1;
     frame->slot_offset = STACK_LEN(vm) - argc -1;
     return 1;
@@ -118,8 +127,8 @@ static uint8_t call(VM *vm, object_function *function, uint8_t argc) {
 static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
     if (IS_OBJ(callee)) {
         switch(GET_OBJ_TYPE(callee)) {
-            case OBJ_FUNCTION: {
-                return call(vm, AS_FUNCTION(callee), argc);
+            case OBJ_CLOSURE: {
+                return call(vm, AS_CLOSURE(callee), argc);
             }
             case OBJ_NATIVE: {
                 native_function native = AS_NATIVE(callee);
@@ -134,6 +143,37 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
     }
     runtime_error(vm, "Can only call functions.");
     return 0;
+}
+
+static object_upvalue *capture_upvalue(VM *vm, value *local) {
+    object_upvalue *prev_upval = NULL;
+    object_upvalue *upval = vm->open_upvalues;
+    while (upval != NULL && upval->location > local) {
+        prev_upval = upval;
+        upval = upval->next;
+    }
+    if (upval != NULL && upval->location == local) {
+        return upval;
+    }
+
+    object_upvalue *created_upvalue = new_upvalue(vm, local);
+    created_upvalue->next = NULL;
+    if (prev_upval == NULL) {
+        vm->open_upvalues = created_upvalue;
+    }
+    else {
+        prev_upval->next = created_upvalue;
+    }
+    return created_upvalue;
+}
+
+static void close_upvalues(VM *vm, value *last) {
+    while (vm->open_upvalues != NULL && vm->open_upvalues->location >= last) {
+        object_upvalue *upval = vm->open_upvalues;
+        upval->closed = *upval->location;
+        upval->location = &upval->closed;
+        vm->open_upvalues = upval->next;
+    }
 }
 
 uint8_t is_falsey(value v) {
@@ -245,11 +285,11 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
 static interpret_result run(VM *vm) {
     call_frame *frame = &vm->frames[vm->frame_count - 1];
     #define READ_BYTE() (*frame->ip++)
-    #define READ_CONSTANT() (frame->function->seg.constants.values[READ_BYTE()])    
+    #define READ_CONSTANT() (frame->closure->function->seg.constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
     #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
-    #define READ_CONSTANT_LONG() (frame->function->seg.constants.values[READ_UINT24()])
+    #define READ_CONSTANT_LONG() (frame->closure->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
     #define BINARY_OP(type, op) \
         do { \
@@ -307,11 +347,12 @@ static interpret_result run(VM *vm) {
                 printf("]");
             }
             printf("\n");
-            dissassemble_instruction(&frame->function->seg, (size_t) (frame->ip - frame->function->seg.bytecode));
+            dissassemble_instruction(&frame->closure->function->seg, (size_t) (frame->ip - frame->closure->function->seg.bytecode));
         #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN:{
                 value result = pop(vm);
+                close_upvalues(vm, frame->slots);
                 vm->frame_count--;
                 if (vm->frame_count == 0) {
                     pop(vm);
@@ -425,6 +466,11 @@ static interpret_result run(VM *vm) {
                 push(vm, OBJ_VAL(array));
                 break;
             }
+            case OP_CLOSE_UPVALUE: {
+                close_upvalues(vm, vm->stack_ptr - 1);
+                pop(vm);
+                break;
+            }
             case OP_CONSTANT: {
                 value constant = READ_CONSTANT();
                 push(vm, constant);
@@ -478,6 +524,16 @@ static interpret_result run(VM *vm) {
                 frame->slots[arg] = peek(vm, 0);
                 break;
             }
+            case OP_GET_UPVALUE: {
+                uint32_t slot = READ_UINT24();
+                push(vm, *frame->closure->upvalues[slot]->location);
+                break;
+            }
+            case OP_SET_UPVALUE: {
+                uint32_t slot = READ_UINT24();
+                *frame->closure->upvalues[slot]->location = peek(vm, 0);
+                break;
+            }
             case OP_CONSTANT_LONG: {
                 value constant = READ_CONSTANT_LONG();
                 push(vm, constant);
@@ -503,6 +559,22 @@ static interpret_result run(VM *vm) {
                 frame->ip -= offset;
                 break;
             }
+            case OP_CLOSURE: {
+                object_function *function = AS_FUNCTION(READ_CONSTANT_LONG());
+                object_closure *closure = new_closure(vm, function);
+                push(vm, OBJ_VAL(closure));
+                for (uint32_t i = 0; i < closure->upvalue_count; i++) {
+                    uint8_t is_local = READ_BYTE();
+                    uint32_t index = READ_UINT24();
+                    if (is_local) {
+                        closure->upvalues[i] = capture_upvalue(vm, frame->slots + index);
+                    }
+                    else {
+                        closure->upvalues[i] = frame->closure->upvalues[index];
+                    }
+                }
+                break;
+            }
         }
     }
 
@@ -522,7 +594,10 @@ interpret_result interpret(VM *vm, const char *source) {
     if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
     push(vm, OBJ_VAL(function));
-    call(vm, function, 0);
+    object_closure *closure = new_closure(vm, function);
+    pop(vm);
+    push(vm, OBJ_VAL(closure));
+    call(vm, closure, 0);
 
     return run(vm);
 }

@@ -22,7 +22,13 @@ typedef struct {
 typedef struct {
     token name;
     long depth;
+    uint8_t is_captured;
 } local;
+
+typedef struct {
+    uint32_t index;
+    uint8_t is_local;
+} upvalue;
 
 typedef enum {
     TYPE_FUNCTION,
@@ -51,6 +57,10 @@ typedef struct compiler {
     size_t loop_capacity;
     object_function *function;
     function_type type;
+    struct compiler *enclosing;
+    uint32_t upvalue_count;
+    uint32_t upvalue_capacity;
+    upvalue *upvalues;
 } compiler;
 
 typedef enum {
@@ -95,6 +105,7 @@ static void add_break(compiler *c, size_t break_addr);
 static void add_continue(compiler *c, size_t cont_addr);
 static void free_loop(loop l);
 static void add_local(parser *p, compiler *c, token name);
+static long resolve_upvalue(parser *p, compiler *c, token *name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
 
@@ -107,7 +118,11 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->locals = NULL;
     c->loops = NULL;
     c->function = NULL;
+    c->enclosing = NULL;
     c->type = type;
+    c->upvalue_capacity = 0;
+    c->upvalue_count = 0;
+    c->upvalues = NULL;
     c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
     if (id) {
@@ -119,6 +134,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     }
     add_local(p, c, t);
     c->locals[c->local_count].depth = 0;
+    c->locals[c->local_count].is_captured = 0;
     if (type != TYPE_SCRIPT) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
@@ -130,6 +146,7 @@ static void destroy_compiler(compiler *c, VM *vm) {
         free_loop(c->loops[i]);
     }
     FREE_ARRAY(loop, c->loops, c->loop_capacity);
+    FREE_ARRAY(upvalue, c->upvalues, c->upvalue_capacity);
     init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL);
     free(c->locals);
 }
@@ -295,6 +312,7 @@ static void exit_loop_scope(parser *p, compiler *c) {
 static object_function *end_compiler(parser *p, compiler *c) {
     emit_return(p, c);
     object_function *f = c->function;
+    f->upvalue_count = c->upvalue_count;
     #ifdef DEBUG_PRINT_CODE
         if (!p->had_error) {
             disassemble_segment(current_seg(c), f->name != NULL ? f->name->chars : "<script>");
@@ -310,17 +328,24 @@ static void begin_scope(compiler *c) {
 static void end_scope(parser *p, compiler *c) {
     c->scope_depth--;
 
-    long to_pop = 0;
     while (c->local_count > 0 && c->locals[c->local_count-1].depth > c->scope_depth) {
-        to_pop++;
-        c->local_count--;
-    }
-    for (; to_pop > 0; to_pop-=255) {
-        if (to_pop >= 255) {
-            emit_2_bytes(p, c, OP_POPN, 255);
+        if (c->locals[c->local_count-1].is_captured) {
+            emit_byte(p, c, OP_CLOSE_UPVALUE);
+            c->local_count--;
+            continue;
         }
-        else {
-            emit_2_bytes(p, c, OP_POPN, to_pop);
+        long to_pop = 0;
+        while (c->local_count > 0 && c->locals[c->local_count-1].depth > c->scope_depth && !c->locals[c->local_count-1].is_captured) {
+            to_pop++;
+            c->local_count--;
+        }
+        for (; to_pop > 0; to_pop-=255) {
+            if (to_pop >= 255) {
+                emit_2_bytes(p, c, OP_POPN, 255);
+            }
+            else {
+                emit_2_bytes(p, c, OP_POPN, to_pop);
+            }
         }
     }
 }
@@ -441,6 +466,11 @@ static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t c
     if (arg_long != -1) {
         get_op = OP_GET_LOCAL;
         set_op = OP_SET_LOCAL;
+    }
+    else if ((arg_long = resolve_upvalue(p, c, &name)) != -1) {
+        arg = (uint32_t) arg_long;
+        get_op = OP_GET_UPVALUE;
+        set_op = OP_SET_UPVALUE;
     }
     else {
         arg = identifier_constant(p, c, vm, &name);
@@ -609,6 +639,7 @@ static void block(parser *p, compiler *c, VM *vm) {
 static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
     init_compiler(p, &function_compiler, vm, type, &p->prev);
+    function_compiler.enclosing = c;
     begin_scope(&function_compiler);
     mark_initialised(&function_compiler);
     consume(p, TOKEN_LEFT_PAREN, "Expect '(' after function name.");
@@ -626,8 +657,15 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     consume(p, TOKEN_LEFT_BRACE, "Expect '{' before function body.");
     block(p, &function_compiler, vm);
     object_function *function = end_compiler(p, &function_compiler);
+    uint32_t constant = make_constant(p, c, OBJ_VAL(function));
+    uint8_t bytes[4] = {OP_CLOSURE, constant >> 16, constant >> 8, constant};
+    emit_bytes(p, c, bytes, 4);
+    for (uint32_t i = 0; i < function->upvalue_count; i++) {
+        upvalue upval = function_compiler.upvalues[i];
+        uint8_t bytes[4] = {upval.is_local ? 1 : 0, upval.index << 16, upval.index << 8, upval.index};
+        emit_bytes(p, c, bytes, 4);
+    }
     destroy_compiler(&function_compiler, vm);
-    emit_2_bytes(p, c, OP_CONSTANT, make_constant(p, c, OBJ_VAL(function)));
 }
 
 static void function_declaration(parser *p, compiler *c, VM *vm) {
@@ -927,6 +965,42 @@ static long resolve_local(parser *p, compiler *c, token *name) {
     return -1;
 }
 
+static long add_upvalue(parser *p, compiler *c, uint32_t index, uint8_t is_local) {
+    if (c->upvalue_count == UINT24_MAX) {
+        error(p, "Too many closure variables in function.");
+        return 0;
+    }
+    if (c->upvalue_count >= c->upvalue_capacity) {
+        uint32_t oldc = c->upvalue_capacity;
+        c->upvalue_capacity = GROW_CAPACITY(oldc);
+        c->upvalues = GROW_ARRAY(upvalue, c->upvalues, oldc, c->upvalue_capacity);
+    }
+    for (uint32_t i = 0; i < c->upvalue_count; i++) {
+        upvalue *upval = &c->upvalues[i];
+        if (upval->index == index && upval->is_local == is_local) {
+            return i;
+        }
+    }
+    c->upvalues[c->upvalue_count].is_local = is_local;
+    c->upvalues[c->upvalue_count].index = index;
+    return c->upvalue_count++;
+}
+
+static long resolve_upvalue(parser *p, compiler *c, token *name) {
+    if (c->enclosing == NULL) return -1;
+    long local  = resolve_local(p, c->enclosing, name);
+    if (local != -1) {
+        c->enclosing->locals[local].is_captured = 1;
+        return add_upvalue(p, c, (uint32_t) local, 1);
+    }
+    long upval = resolve_upvalue(p, c->enclosing, name);
+    if (upval != -1) {
+        return add_upvalue(p, c, (uint32_t) upval, 0);
+    }
+
+    return -1;
+}
+
 static void add_local(parser *p, compiler *c, token name) {
     // Extra code for allowing more locals
     if (c->local_count > UINT24_MAX) {
@@ -941,6 +1015,7 @@ static void add_local(parser *p, compiler *c, token name) {
     local *l = &c->locals[c->local_count++];
     l->name = name;
     l->depth = -1;
+    l->is_captured = 0;
 }
 
 static void push_loop_stack(compiler *c, size_t cont_addr, long scope_depth, uint8_t sentinel) {

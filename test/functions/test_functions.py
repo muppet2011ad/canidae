@@ -44,3 +44,39 @@ def test_native(): # Not meant to be a full test of canidae's standard library, 
     assert len(lines) == 2
     assert lines[0] == "Hello, World!"
     assert lines[1] == ""
+
+def test_closure_open():
+    completed = subprocess.run(["bin/canidae",  "test/functions/closure_open.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "outside"
+    assert lines[1] == ""
+
+def test_closure_open_shared():
+    completed = subprocess.run(["bin/canidae",  "test/functions/closure_open_shared.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 3
+    assert lines[0] == "0"
+    assert lines[1] == "42"
+    assert lines[2] == ""
+
+def test_closure_closed():
+    completed = subprocess.run(["bin/canidae",  "test/functions/closure_closed.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 3
+    assert lines[0] == "Hello, World!"
+    assert lines[1] == "Assignment is behaving as you'd expect."
+    assert lines[2] == ""
+
+def test_closure_closed_shared():
+    completed = subprocess.run(["bin/canidae",  "test/functions/closure_closed_shared.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 4
+    assert lines[0] == "Hello, World!"
+    assert lines[1] == "Assignment is behaving as you'd expect."
+    assert lines[2] == "Goodbye, World!"
+    assert lines[3] == ""

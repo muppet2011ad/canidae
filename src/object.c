@@ -24,10 +24,30 @@ object_function *new_function(VM *vm) {
     return f;
 }
 
+object_closure *new_closure(VM *vm, object_function *function) {
+    object_upvalue **upvalues = ALLOCATE(object_upvalue*, function->upvalue_count);
+    for (uint32_t i = 0; i < function->upvalue_count; i++) {
+        upvalues[i] = NULL;
+    }
+    object_closure *closure = ALLOCATE_OBJ(vm, object_closure, OBJ_CLOSURE);
+    closure->function = function;
+    closure->upvalues = upvalues;
+    closure->upvalue_count = function->upvalue_count;
+    return closure;
+}
+
 object_native *new_native(VM *vm, native_function function) {
     object_native *n = ALLOCATE_OBJ(vm, object_native, OBJ_NATIVE);
     n->function = function;
     return n;
+}
+
+object_upvalue *new_upvalue(VM *vm, value *slot) {
+    object_upvalue *upvalue = ALLOCATE_OBJ(vm, object_upvalue, OBJ_UPVALUE);
+    upvalue->location = slot;
+    upvalue->closed = NULL_VAL;
+    upvalue->next = NULL;
+    return upvalue;
 }
 
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
@@ -156,6 +176,11 @@ void print_object(value v) {
             break;
         case OBJ_NATIVE:
             printf("<native function>");
+            break;
+        case OBJ_CLOSURE:
+            print_function(AS_CLOSURE(v)->function);
+            break;
+        default:
             break;
     }
 }

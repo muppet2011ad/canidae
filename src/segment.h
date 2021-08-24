@@ -34,6 +34,7 @@ typedef enum {
     OP_ARRAY_GET,
     OP_ARRAY_GET_KEEP_REF,
     OP_ARRAY_SET,
+    OP_CLOSE_UPVALUE,
     // One-byte operand
     OP_CONSTANT,
     OP_POPN,
@@ -45,12 +46,15 @@ typedef enum {
     OP_SET_GLOBAL,
     OP_GET_LOCAL,
     OP_SET_LOCAL,
+    OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
     // Five-byte operand
     OP_JUMP_IF_FALSE,
     OP_JUMP_IF_TRUE,
     OP_JUMP,
     OP_LOOP,
-    // Seven-byte operand
+    // Variable-length operand
+    OP_CLOSURE,
 } opcode;
 
 typedef struct {

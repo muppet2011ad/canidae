@@ -1,0 +1,12 @@
+{
+    function outer() {
+        let x = "outside";
+        function inner() {
+            print x;
+        }
+        return inner;
+    }
+
+    let closure = outer();
+    closure();
+}
