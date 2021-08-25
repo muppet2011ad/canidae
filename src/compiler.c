@@ -109,7 +109,7 @@ static long resolve_upvalue(parser *p, compiler *c, token *name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
 
-static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id) {
+static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id, uint8_t make_function) {
     c->local_count = 0;
     c->local_capacity = 0;
     c->scope_depth = 0;
@@ -123,7 +123,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->upvalue_capacity = 0;
     c->upvalue_count = 0;
     c->upvalues = NULL;
-    c->function = new_function(vm);
+    if (make_function) c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
     if (id) {
         t = *id;
@@ -141,13 +141,13 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
 }
 
 static void destroy_compiler(compiler *c, VM *vm) {
-    FREE_ARRAY(local, c->locals, c->local_capacity);
+    FREE_ARRAY(NULL, local, c->locals, c->local_capacity);
     for (size_t i = 0; i < c->num_loops; i++) {
         free_loop(c->loops[i]);
     }
-    FREE_ARRAY(loop, c->loops, c->loop_capacity);
-    FREE_ARRAY(upvalue, c->upvalues, c->upvalue_capacity);
-    init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL);
+    FREE_ARRAY(NULL, loop, c->loops, c->loop_capacity);
+    FREE_ARRAY(NULL, upvalue, c->upvalues, c->upvalue_capacity);
+    init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL, 0);
     free(c->locals);
 }
 
@@ -638,7 +638,7 @@ static void block(parser *p, compiler *c, VM *vm) {
 
 static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
-    init_compiler(p, &function_compiler, vm, type, &p->prev);
+    init_compiler(p, &function_compiler, vm, type, &p->prev, 1);
     function_compiler.enclosing = c;
     begin_scope(&function_compiler);
     mark_initialised(&function_compiler);
@@ -973,7 +973,7 @@ static long add_upvalue(parser *p, compiler *c, uint32_t index, uint8_t is_local
     if (c->upvalue_count >= c->upvalue_capacity) {
         uint32_t oldc = c->upvalue_capacity;
         c->upvalue_capacity = GROW_CAPACITY(oldc);
-        c->upvalues = GROW_ARRAY(upvalue, c->upvalues, oldc, c->upvalue_capacity);
+        c->upvalues = GROW_ARRAY(NULL, upvalue, c->upvalues, oldc, c->upvalue_capacity);
     }
     for (uint32_t i = 0; i < c->upvalue_count; i++) {
         upvalue *upval = &c->upvalues[i];
@@ -1010,7 +1010,7 @@ static void add_local(parser *p, compiler *c, token name) {
     if (c->local_count >= c->local_capacity) {
         uint32_t oldc = c->local_capacity;
         c->local_capacity = GROW_CAPACITY(oldc);
-        c->locals = GROW_ARRAY(local, c->locals, oldc, c->local_capacity);
+        c->locals = GROW_ARRAY(NULL, local, c->locals, oldc, c->local_capacity);
     }
     local *l = &c->locals[c->local_count++];
     l->name = name;
@@ -1022,7 +1022,7 @@ static void push_loop_stack(compiler *c, size_t cont_addr, long scope_depth, uin
     if (c->num_loops >= c->loop_capacity) {
         size_t oldc = c->loop_capacity;
         c->loop_capacity = GROW_CAPACITY(oldc);
-        c->loops = GROW_ARRAY(loop, c->loops, oldc, c->loop_capacity);
+        c->loops = GROW_ARRAY(NULL, loop, c->loops, oldc, c->loop_capacity);
     }
     loop l;
     l.continue_addr = cont_addr;
@@ -1069,7 +1069,7 @@ static void add_break(compiler *c, size_t break_addr) {
     if (l->num_breaks >= l->break_capacity) {
         size_t oldc = l->break_capacity;
         l->break_capacity = GROW_CAPACITY(oldc);
-        l->breaks = GROW_ARRAY(size_t, l->breaks, oldc, l->break_capacity);
+        l->breaks = GROW_ARRAY(NULL, size_t, l->breaks, oldc, l->break_capacity);
     }
     l->breaks[l->num_breaks] = break_addr;
     l->num_breaks++;
@@ -1080,15 +1080,15 @@ static void add_continue(compiler *c, size_t cont_addr) {
     if (l->num_continues >= l->continue_capacity) {
         size_t oldc = l->continue_capacity;
         l->continue_capacity = GROW_CAPACITY(oldc);
-        l->continues = GROW_ARRAY(size_t, l->continues, oldc, l->continue_capacity);
+        l->continues = GROW_ARRAY(NULL, size_t, l->continues, oldc, l->continue_capacity);
     }
     l->continues[l->num_continues] = cont_addr;
     l->num_continues++;
 }
 
 static void free_loop(loop l) {
-    FREE_ARRAY(size_t, l.breaks, l.break_capacity);
-    FREE_ARRAY(size_t, l.continues, l.continue_capacity);
+    FREE_ARRAY(NULL, size_t, l.breaks, l.break_capacity);
+    FREE_ARRAY(NULL, size_t, l.continues, l.continue_capacity);
 }
 
 static void declare_variable(parser *p, compiler *c) {
@@ -1131,7 +1131,8 @@ object_function *compile(const char* source, VM *vm) {
     compiler c;
     init_scanner(&s, source);
     init_parser(&p, &s);
-    init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL);
+    init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL, 1);
+    disable_gc(vm);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {
         declaration(&p, &c, vm);
@@ -1139,5 +1140,6 @@ object_function *compile(const char* source, VM *vm) {
     consume(&p, TOKEN_EOF, "Expect end of expression.");
     object_function *f = end_compiler(&p, &c);
     destroy_compiler(&c, vm);
+    enable_gc(vm);
     return p.had_error ? NULL : f;
 }

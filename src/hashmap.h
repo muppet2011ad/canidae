@@ -4,6 +4,9 @@
 
 #include "common.h"
 #include "value.h"
+#include "vm.h"
+
+typedef struct VM *vm;
 
 typedef struct {
     object_string *k;
@@ -17,11 +20,13 @@ typedef struct {
 } hashmap;
 
 void init_hashmap(hashmap *h);
-void destroy_hashmap(hashmap *h);
-uint8_t hashmap_set(hashmap *h, object_string *key, value val);
+void destroy_hashmap(hashmap *h, VM *vm);
+uint8_t hashmap_set(hashmap *h, VM *vm, object_string *key, value val);
 uint8_t hashmap_get(hashmap *h, object_string *key, value *val);
 uint8_t hashmap_delete(hashmap *h, object_string *key);
-void hashmap_copy_all(hashmap *from, hashmap *to);
+void hashmap_copy_all(VM *vm, hashmap *from, hashmap *to);
 object_string *hashmap_find_string(hashmap *h, const char *chars, uint32_t length, uint32_t hash);
+void mark_hashmap(VM *vm, hashmap *h);
+void hashmap_remove_white(VM *vm, hashmap *h);
 
 #endif

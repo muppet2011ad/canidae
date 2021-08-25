@@ -11,8 +11,6 @@
 #include "object.h"
 #include "stdlib_canidae.h"
 
-#define STACK_LEN(vm) (vm->stack_ptr - vm->stack)
-
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
     vm->frame_count = 0;
@@ -45,7 +43,7 @@ void runtime_error(VM *vm, const char *format, ...) {
 void define_native(VM *vm, const char *name, native_function function) {
     push(vm, OBJ_VAL(copy_string(vm, name, strlen(name))));
     push(vm, OBJ_VAL(new_native(vm, function)));
-    hashmap_set(&vm->globals, AS_STRING(vm->stack[0]), vm->stack[1]);
+    hashmap_set(&vm->globals, vm, AS_STRING(vm->stack[0]), vm->stack[1]);
     popn(vm, 2);
 }
 
@@ -54,6 +52,12 @@ void init_VM(VM *vm) {
     if (vm->stack == NULL) {
         fprintf(stderr, "Out of memory.");
     }
+    vm->gc_allowed = 0;
+    vm->grey_capacity = 0;
+    vm->grey_count = 0;
+    vm->grey_stack = NULL;
+    vm->bytes_allocated = STACK_INITIAL*sizeof(value); // Include initial stack allocation in heap allocation
+    vm->gc_threshold = GC_THRESHOLD_INITIAL; // Arbitrary threshold
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
     init_hashmap(&vm->strings);
@@ -63,31 +67,48 @@ void init_VM(VM *vm) {
 }
 
 void destroy_VM(VM *vm) {
-    destroy_hashmap(&vm->strings);
-    destroy_hashmap(&vm->globals);
-    free_objects(vm->objects);
+    destroy_hashmap(&vm->strings, vm);
+    destroy_hashmap(&vm->globals, vm);
+    free_objects(vm, vm->objects);
     free(vm->stack);
+    free(vm->grey_stack);
 }
 
-void push(VM *vm, value val) {
-    if (STACK_LEN(vm) >= vm->stack_capacity) {
-        size_t old_capacity = vm->stack_capacity;
-        size_t len = STACK_LEN(vm);
-        vm->stack_capacity = GROW_CAPACITY(old_capacity);
-        value *stack_old = vm->stack;
-        vm->stack = GROW_ARRAY(value, vm->stack, old_capacity, vm->stack_capacity);
-        vm->stack_ptr = &(vm->stack[len]);
+void enable_gc(VM *vm) {
+    vm->gc_allowed = 1;
+}
+
+void disable_gc(VM *vm) {
+    vm->gc_allowed = 0;
+}
+
+void resize_stack(VM *vm, size_t target_size) {
+    disable_gc(vm);
+    size_t oldc = vm->stack_capacity;
+    size_t len = STACK_LEN(vm);
+    vm->stack_capacity = target_size;
+    value *stack_old = vm->stack;
+    vm->stack = GROW_ARRAY(vm, value, vm->stack, oldc, vm->stack_capacity);
+    vm->stack_ptr = &(vm->stack[len]);
+    if (vm->stack != stack_old) { // If realloc has moved the stack, we need to update all pointers to the stack in upvalues and call frames
         for (size_t i = 0; i < vm->frame_count; i++) { // Moves stack frames to meet the new stack size
             call_frame *frame = &vm->frames[i];
             frame->slots = &(vm->stack[frame->slot_offset]);
         }
-        object_upvalue *upval = vm->open_upvalues; // We also need to update open upvalues
+        object_upvalue *upval = vm->open_upvalues;
         while (upval != NULL) {
             if (&upval->closed != upval->location) { // If not closed, location must be on the stack
                 upval->location = vm->stack + (upval->location - stack_old); // Calculate new pointer to location on stack
             }
             upval = upval->next; // Move onto the next upvalue
         }
+    }
+    enable_gc(vm);
+}
+
+void push(VM *vm, value val) {
+    if (STACK_LEN(vm) >= vm->stack_capacity) {
+        resize_stack(vm, GROW_CAPACITY(vm->stack_capacity));
     }
     *vm->stack_ptr = val;
     vm->stack_ptr++;
@@ -132,7 +153,10 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
             }
             case OBJ_NATIVE: {
                 native_function native = AS_NATIVE(callee);
+                disable_gc(vm); // Disables gc during native function in case native function doesn't have gc-safe (i.e. push objects to stack) code
                 value result = native(vm, argc, vm->stack_ptr - argc);
+                enable_gc(vm); // Re-enables afterwards
+                FREE(vm, char, ALLOCATE(vm, char, 1)); // Code triggers gc after function call if we've reached the threshold - the whole block essentially defers gc until after the native function
                 vm->stack_ptr -= argc + 1;
                 if (IS_NATIVE_ERROR(result)) return 0;
                 push(vm, result);
@@ -190,7 +214,7 @@ static uint8_t concatenate(VM *vm) {
                 runtime_error(vm, "String concatenation results in string larger than max string size.");
                 return INTERPRET_RUNTIME_ERROR;
             }
-            char *chars = ALLOCATE(char, len + 1);
+            char *chars = ALLOCATE(vm, char, len + 1);
             memcpy(chars, a->chars, a->length);
             memcpy(chars + a->length, b->chars, b->length);
             chars[len] = '\0';
@@ -491,7 +515,7 @@ static interpret_result run(VM *vm) {
             }
             case OP_DEFINE_GLOBAL: {
                 object_string *name = READ_STRING();
-                hashmap_set(&vm->globals, name, peek(vm, 0));
+                hashmap_set(&vm->globals, vm, name, peek(vm, 0));
                 pop(vm);
                 break;
             }
@@ -507,7 +531,7 @@ static interpret_result run(VM *vm) {
             }
             case OP_SET_GLOBAL: {
                 object_string *name = READ_STRING();
-                if(hashmap_set(&vm->globals, name, peek(vm, 0))) {
+                if(hashmap_set(&vm->globals, vm, name, peek(vm, 0))) {
                     hashmap_delete(&vm->globals, name);
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
                     return INTERPRET_RUNTIME_ERROR;

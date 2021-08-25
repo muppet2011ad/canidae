@@ -163,13 +163,13 @@ static value len_native(VM *vm, uint8_t argc, value *args) { // Gets length of a
 static value read_line(VM *vm, FILE *f) { // Helper function to read a line as an obj_string, not intended to be a directly accessible part of the lib
     size_t capacity = 0;
     size_t len = 0;
-    char *s = ALLOCATE(char, 8);
+    char *s = ALLOCATE(vm, char, 8);
     char c;
     while (EOF != (c = fgetc(f)) && c != '\r' && c != '\n') {
         if (capacity == len) {
             size_t oldc = capacity;
             capacity = GROW_CAPACITY(capacity);
-            s = GROW_ARRAY(char, s, oldc, capacity);
+            s = GROW_ARRAY(vm, char, s, oldc, capacity);
         } 
         s[len++] = c;
     }

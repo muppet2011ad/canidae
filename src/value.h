@@ -4,6 +4,8 @@
 
 #include "common.h"
 
+typedef struct VM VM;
+
 typedef enum {
     NULL_TYPE,
     NUM_TYPE,
@@ -53,8 +55,8 @@ typedef struct {
 #define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE)
 
 void init_value_array(value_array *arr);
-void write_to_value_array(value_array *arr, value val);
-void destroy_value_array(value_array *arr);
+void write_to_value_array(VM *vm, value_array *arr, value val);
+void destroy_value_array(VM *vm, value_array *arr);
 void print_value(value val);
 uint8_t value_equality(value a, value b);
 

@@ -5,8 +5,9 @@
 #include "segment.h"
 #include "hashmap.h"
 
-#define STACK_INITIAL 4
+#define STACK_INITIAL 64
 #define FRAMES_MAX 1024
+#define GC_THRESHOLD_INITIAL 512 * 1024
 
 typedef struct {
     object_closure *closure;
@@ -15,7 +16,7 @@ typedef struct {
     size_t slot_offset;
 } call_frame;
 
-typedef struct {
+typedef struct VM {
     call_frame frames[FRAMES_MAX];
     uint16_t frame_count;
     value *stack;
@@ -23,9 +24,17 @@ typedef struct {
     value *stack_ptr;
     hashmap strings;
     hashmap globals;
+    uint8_t gc_allowed;
+    uint64_t grey_capacity;
+    long grey_count;
+    object **grey_stack;
+    size_t bytes_allocated;
+    size_t gc_threshold;
     object_upvalue *open_upvalues;
     object *objects;
 } VM;
+
+#define STACK_LEN(vm) (vm->stack_ptr - vm->stack)
 
 typedef enum {
     INTERPRET_OK,
@@ -42,5 +51,8 @@ value popn(VM *vm, size_t n);
 void define_native(VM *vm, const char *name, value (*function)(VM *vm, uint8_t argc, value *argv) );
 void runtime_error(VM *vm, const char *format, ...);
 uint8_t is_falsey(value v);
+void enable_gc(VM *vm);
+void disable_gc(VM *vm);
+void resize_stack(VM *vm, size_t target_size);
 
 #endif

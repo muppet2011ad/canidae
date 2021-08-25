@@ -4,7 +4,7 @@ OPTS := -Wall -pedantic -std=c11
 
 BUILD_FOLDER := bin
 
-DEBUG_OPTS := -DDEBUG_PRINT_CODE -DDEBUG_TRACE_EXECUTION
+DEBUG_OPTS := -DDEBUG_PRINT_CODE -DDEBUG_TRACE_EXECUTION -DDEBUG_LOG_GC
 
 MAIN_DEPS := $(BUILD_FOLDER)/memory.o $(BUILD_FOLDER)/segment.o $(BUILD_FOLDER)/main.o $(BUILD_FOLDER)/debug.o $(BUILD_FOLDER)/value.o $(BUILD_FOLDER)/vm.o $(BUILD_FOLDER)/compiler.o $(BUILD_FOLDER)/scanner.o $(BUILD_FOLDER)/object.o $(BUILD_FOLDER)/hashmap.o $(BUILD_FOLDER)/stdlib_canidae.o
 
