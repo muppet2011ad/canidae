@@ -125,16 +125,11 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->upvalues = NULL;
     if (make_function) c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
-    if (id) {
-        t = *id;
-    }
-    else {
-        t.start = "";
-        t.length = 0;
-    }
+    t.start = "";
+    t.length = 0;
     add_local(p, c, t);
-    c->locals[c->local_count].depth = 0;
-    c->locals[c->local_count].is_captured = 0;
+    c->locals[c->local_count-1].depth = 0;
+    c->locals[c->local_count-1].is_captured = 0;
     if (type != TYPE_SCRIPT) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
