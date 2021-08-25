@@ -52,6 +52,7 @@ void init_VM(VM *vm) {
     if (vm->stack == NULL) {
         fprintf(stderr, "Out of memory.");
     }
+    vm->long_instruction = 0;
     vm->gc_allowed = 0;
     vm->grey_capacity = 0;
     vm->grey_count = 0;
@@ -314,7 +315,7 @@ static interpret_result run(VM *vm) {
     #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_CONSTANT_LONG() (frame->closure->function->seg.constants.values[READ_UINT24()])
-    #define READ_STRING() AS_STRING(READ_CONSTANT_LONG())
+    #define READ_STRING(constant) AS_STRING(constant)
     #define BINARY_OP(type, op) \
         do { \
             if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
@@ -495,8 +496,19 @@ static interpret_result run(VM *vm) {
                 pop(vm);
                 break;
             }
+            case OP_LONG: {
+                vm->long_instruction = 1;
+                break;
+            }
             case OP_CONSTANT: {
-                value constant = READ_CONSTANT();
+                value constant;
+                if (vm->long_instruction) {
+                    constant = READ_CONSTANT_LONG();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    constant = READ_CONSTANT();
+                }
                 push(vm, constant);
                 break;
             }
@@ -514,13 +526,29 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_DEFINE_GLOBAL: {
-                object_string *name = READ_STRING();
+                value constant;
+                if (vm->long_instruction) {
+                    constant = READ_CONSTANT_LONG();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    constant = READ_CONSTANT();
+                }
+                object_string *name = READ_STRING(constant);
                 hashmap_set(&vm->globals, vm, name, peek(vm, 0));
                 pop(vm);
                 break;
             }
             case OP_GET_GLOBAL: {
-                object_string *name = READ_STRING();
+                value constant;
+                if (vm->long_instruction) {
+                    constant = READ_CONSTANT_LONG();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    constant = READ_CONSTANT();
+                }
+                object_string *name = READ_STRING(constant);
                 value val;
                 if (!hashmap_get(&vm->globals, name, &val)) {
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
@@ -530,7 +558,15 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_SET_GLOBAL: {
-                object_string *name = READ_STRING();
+                value constant;
+                if (vm->long_instruction) {
+                    constant = READ_CONSTANT_LONG();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    constant = READ_CONSTANT();
+                }
+                object_string *name = READ_STRING(constant);
                 if(hashmap_set(&vm->globals, vm, name, peek(vm, 0))) {
                     hashmap_delete(&vm->globals, name);
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
@@ -539,28 +575,51 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_GET_LOCAL: {
-                uint32_t arg = READ_UINT24();
+                uint32_t arg;
+                if (vm->long_instruction) {
+                    arg = READ_UINT24();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    arg = READ_BYTE();
+                }
                 push(vm, frame->slots[arg]);
                 break;
             }
             case OP_SET_LOCAL: {
-                uint32_t arg = READ_UINT24();
+                uint32_t arg;
+                if (vm->long_instruction) {
+                    arg = READ_UINT24();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    arg = READ_BYTE();
+                }
                 frame->slots[arg] = peek(vm, 0);
                 break;
             }
             case OP_GET_UPVALUE: {
-                uint32_t slot = READ_UINT24();
-                push(vm, *frame->closure->upvalues[slot]->location);
+                uint32_t arg;
+                if (vm->long_instruction) {
+                    arg = READ_UINT24();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    arg = READ_BYTE();
+                }
+                push(vm, *frame->closure->upvalues[arg]->location);
                 break;
             }
             case OP_SET_UPVALUE: {
-                uint32_t slot = READ_UINT24();
-                *frame->closure->upvalues[slot]->location = peek(vm, 0);
-                break;
-            }
-            case OP_CONSTANT_LONG: {
-                value constant = READ_CONSTANT_LONG();
-                push(vm, constant);
+                uint32_t arg;
+                if (vm->long_instruction) {
+                    arg = READ_UINT24();
+                    vm->long_instruction = 0;
+                }
+                else {
+                    arg = READ_BYTE();
+                }
+                *frame->closure->upvalues[arg]->location = peek(vm, 0);
                 break;
             }
             case OP_JUMP_IF_FALSE: {

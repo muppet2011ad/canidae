@@ -56,6 +56,38 @@ static size_t constant_long_instruction(const char *name, segment *s, size_t off
     return offset + 4;
 }
 
+static size_t long_instruction(const char *name, segment *s, size_t offset) {
+    printf("(%s)\n", name);
+    offset++;
+    printf("%08lu ", offset);
+    if (offset > 0 && s->lines[offset] == s->lines[offset-1]) {
+        printf("   | ");
+    }
+    else {
+        printf("%4d ", s->lines[offset]);
+    }
+    switch (s->bytecode[offset]) {
+        case OP_CONSTANT:
+            return constant_long_instruction("OP_CONSTANT", s, offset);
+        case OP_DEFINE_GLOBAL:
+            return constant_long_instruction("OP_DEFINE_GLOBAL", s, offset);
+        case OP_GET_GLOBAL:
+            return constant_long_instruction("OP_GET_GLOBAL", s, offset);
+        case OP_SET_GLOBAL:
+            return constant_long_instruction("OP_SET_GLOBAL", s, offset);
+        case OP_GET_LOCAL:
+            return three_byte_instruction("OP_GET_LOCAL", s, offset);
+        case OP_SET_LOCAL:
+            return three_byte_instruction("OP_SET_LOCAL", s, offset);
+        case OP_GET_UPVALUE:
+            return three_byte_instruction("OP_GET_UPVALUE", s, offset);
+        case OP_SET_UPVALUE:
+            return three_byte_instruction("OP_SET_UPVALUE", s, offset);
+        default:
+            return 1;
+    }
+}
+
 size_t dissassemble_instruction(segment *s, size_t offset) {
     printf("%08lu ", offset);
     if (offset > 0 && s->lines[offset] == s->lines[offset-1]) {
@@ -112,6 +144,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_ARRAY_SET", offset);
         case OP_CLOSE_UPVALUE:
             return simple_instruction("OP_CLOSE_UPVALUE", offset);
+        case OP_LONG:
+            return long_instruction("OP_LONG", s, offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
@@ -119,21 +153,19 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
         case OP_CALL:
             return raw_byte_instruction("OP_CALL", s, offset);
         case OP_DEFINE_GLOBAL:
-            return constant_long_instruction("OP_DEFINE_GLOBAL", s, offset);
+            return constant_instruction("OP_DEFINE_GLOBAL", s, offset);
         case OP_GET_GLOBAL:
-            return constant_long_instruction("OP_GET_GLOBAL", s, offset);
+            return constant_instruction("OP_GET_GLOBAL", s, offset);
         case OP_SET_GLOBAL:
-            return constant_long_instruction("OP_SET_GLOBAL", s, offset);
+            return constant_instruction("OP_SET_GLOBAL", s, offset);
         case OP_GET_LOCAL:
-            return three_byte_instruction("OP_GET_LOCAL", s, offset);
+            return raw_byte_instruction("OP_GET_LOCAL", s, offset);
         case OP_SET_LOCAL:
-            return three_byte_instruction("OP_SET_LOCAL", s, offset);
+            return raw_byte_instruction("OP_SET_LOCAL", s, offset);
         case OP_GET_UPVALUE:
-            return three_byte_instruction("OP_GET_UPVALUE", s, offset);
+            return raw_byte_instruction("OP_GET_UPVALUE", s, offset);
         case OP_SET_UPVALUE:
-            return three_byte_instruction("OP_SET_UPVALUE", s, offset);
-        case OP_CONSTANT_LONG:
-            return constant_long_instruction("OP_CONSTANT_LONG", s, offset);
+            return raw_byte_instruction("OP_SET_UPVALUE", s, offset);
         case OP_JUMP_IF_FALSE:
             return jump_instruction("OP_JUMP_IF_FALSE", s, 1, offset);
         case OP_JUMP_IF_TRUE:

@@ -232,6 +232,21 @@ static void emit_bytes(parser *p, compiler *c, uint8_t *bytes, size_t n) {
     write_n_bytes_to_segment(current_seg(c), bytes, n, p->prev.line);
 }
 
+static uint8_t emit_variable_length_instruction(parser *p, compiler *c, opcode op, uint32_t operand) {
+    if (operand <= UINT8_MAX) {
+        emit_2_bytes(p, c, op, operand);
+        return 1;
+    }
+    else if (operand <= UINT24_MAX) {
+        uint8_t bytes[5] = {OP_LONG, op, operand >> 16, operand >> 8, operand};
+        emit_bytes(p, c, bytes, 5);
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
 static size_t emit_jump(parser *p, compiler *c, uint8_t instruction) {
     uint8_t bytes[6] = {instruction, 0xff, 0xff, 0xff, 0xff, 0xff};
     emit_bytes(p, c, bytes, 6);
@@ -253,8 +268,8 @@ static void emit_return(parser *p, compiler *c) {
 }
 
 static void emit_constant(parser *p, compiler *c, value v) {
-    uint32_t result = write_constant_to_segment(current_seg(c), v, p->prev.line);
-    if (result == UINT32_MAX) {
+    uint32_t constant = add_constant(current_seg(c), v);
+    if (!emit_variable_length_instruction(p, c, OP_CONSTANT, constant)) {
         error(p, "Too many constants in one chunk.");
     }
 }
@@ -393,8 +408,7 @@ static void assign_with_op(parser *p, compiler *c, VM *vm, uint8_t var_or_arr, u
         emit_byte(p, c, get_op);
     }
     else {
-        uint8_t get_bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(c), get_bytes, 4, p->prev.line);
+        emit_variable_length_instruction(p, c, get_op, arg);
     }
     if (can_eval_expr) {
         expression(p, c, vm);
@@ -406,8 +420,7 @@ static void assign_with_op(parser *p, compiler *c, VM *vm, uint8_t var_or_arr, u
         emit_byte(p, c, set_op);
     }
     else {
-        uint8_t set_bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(c), set_bytes, 4, p->prev.line);
+        emit_variable_length_instruction(p, c, set_op, arg);
     }
 }
 
@@ -418,8 +431,7 @@ static uint8_t handle_assignment(parser *p, compiler *c, VM *vm, uint8_t var_or_
             emit_byte(p, c, set_op);
         } 
         else {
-            uint8_t bytes[4] = {set_op, arg >> 16, arg >> 8, arg};
-            write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
+            emit_variable_length_instruction(p, c, set_op, arg);
         }
         return 1;
     }
@@ -477,8 +489,7 @@ static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t c
         assigned = handle_assignment(p, c, vm, 0, arg, get_op, set_op);
     }
     if (!assigned) {
-        uint8_t bytes[4] = {get_op, arg >> 16, arg >> 8, arg};
-        write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
+        emit_variable_length_instruction(p, c, get_op, arg);
     }
 }
 
@@ -675,8 +686,7 @@ static void define_variable(parser *p, compiler *c, uint32_t global) {
         mark_initialised(c);
         return;
     }
-    uint8_t bytes[4] = {OP_DEFINE_GLOBAL, global >> 16, global >> 8, global};
-    write_n_bytes_to_segment(current_seg(c), bytes, 4, p->prev.line);
+    emit_variable_length_instruction(p, c, OP_DEFINE_GLOBAL, global);
 }
 
 static uint8_t argument_list(parser *p, compiler *c, VM *vm) {

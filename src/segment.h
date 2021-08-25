@@ -35,19 +35,11 @@ typedef enum {
     OP_ARRAY_GET_KEEP_REF,
     OP_ARRAY_SET,
     OP_CLOSE_UPVALUE,
+    OP_LONG,
     // One-byte operand
-    OP_CONSTANT,
     OP_POPN,
     OP_CALL,
     // Three-byte operand 
-    OP_CONSTANT_LONG,
-    OP_DEFINE_GLOBAL,
-    OP_GET_GLOBAL,
-    OP_SET_GLOBAL,
-    OP_GET_LOCAL,
-    OP_SET_LOCAL,
-    OP_GET_UPVALUE,
-    OP_SET_UPVALUE,
     // Five-byte operand
     OP_JUMP_IF_FALSE,
     OP_JUMP_IF_TRUE,
@@ -55,6 +47,15 @@ typedef enum {
     OP_LOOP,
     // Variable-length operand
     OP_CLOSURE,
+    // Variable-length via OP_LONG (one byte without, three bytes with)
+    OP_CONSTANT,
+    OP_DEFINE_GLOBAL,
+    OP_GET_GLOBAL,
+    OP_SET_GLOBAL,
+    OP_GET_LOCAL,
+    OP_SET_LOCAL,
+    OP_GET_UPVALUE,
+    OP_SET_UPVALUE,
 } opcode;
 
 typedef struct {
@@ -68,7 +69,6 @@ typedef struct {
 void init_segment(segment *s);
 void write_to_segment(segment *s, uint8_t byte, uint32_t line);
 void write_n_bytes_to_segment(segment *s, uint8_t *bytes, size_t num_bytes, uint32_t line);
-uint32_t write_constant_to_segment(segment *s, value val, uint32_t line);
 void destroy_segment(segment *s);
 size_t add_constant(segment *s, value val);
 
