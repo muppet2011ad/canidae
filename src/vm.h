@@ -24,6 +24,7 @@ typedef struct VM {
     value *stack_ptr;
     hashmap strings;
     hashmap globals;
+    uint8_t long_instruction;
     uint8_t gc_allowed;
     uint64_t grey_capacity;
     long grey_count;

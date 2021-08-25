@@ -30,24 +30,6 @@ void write_n_bytes_to_segment(segment *s, uint8_t *bytes, size_t num_bytes, uint
     }
 }
 
-uint32_t write_constant_to_segment(segment *s, value val, uint32_t line) { // TODO: make inclusion of instruction optional
-    uint32_t c = (uint32_t) add_constant(s, val);
-    if (c > UINT8_MAX) {
-        if (c > UINT24_MAX) {
-            //fprintf(stderr,"Exceeding max number of constants (%d), cannot add constant.", UINT24_MAX); // Add proper error handling
-            return UINT32_MAX;
-        }
-        else {
-            uint8_t bytes[4] = {OP_CONSTANT_LONG >> 24, c >> 16, c >> 8, c};
-            write_n_bytes_to_segment(s, bytes, 4, line);
-        }
-    } else {
-        write_to_segment(s, OP_CONSTANT, line);
-        write_to_segment(s, (uint8_t) c, line);
-    }
-    return c;
-}
-
 void destroy_segment(segment *s) {
     FREE_ARRAY(NULL, uint8_t, s->bytecode, s->capacity);
     FREE_ARRAY(NULL, uint32_t, s->lines, s->capacity);
