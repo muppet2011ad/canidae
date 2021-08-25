@@ -153,7 +153,10 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
             }
             case OBJ_NATIVE: {
                 native_function native = AS_NATIVE(callee);
+                disable_gc(vm); // Disables gc during native function in case native function doesn't have gc-safe (i.e. push objects to stack) code
                 value result = native(vm, argc, vm->stack_ptr - argc);
+                enable_gc(vm); // Re-enables afterwards
+                FREE(vm, char, ALLOCATE(vm, char, 1)); // Code triggers gc after function call if we've reached the threshold - the whole block essentially defers gc until after the native function
                 vm->stack_ptr -= argc + 1;
                 if (IS_NATIVE_ERROR(result)) return 0;
                 push(vm, result);
