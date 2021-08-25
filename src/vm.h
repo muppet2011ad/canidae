@@ -7,7 +7,7 @@
 
 #define STACK_INITIAL 64
 #define FRAMES_MAX 1024
-#define GC_THRESHOLD_INITIAL 2.5 * 1024
+#define GC_THRESHOLD_INITIAL 512 * 1024
 
 typedef struct {
     object_closure *closure;
