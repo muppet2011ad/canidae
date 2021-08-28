@@ -14,7 +14,7 @@ all: $(BUILD_FOLDER)/canidae $(BUILD_FOLDER)/canidae_debug
 
 $(BUILD_FOLDER)/.sentinel:
 	mkdir $(BUILD_FOLDER)
-	touch $(BUILD_FOLDER).sentinel
+	touch $(BUILD_FOLDER)/.sentinel
 
 canidae: $(BUILD_FOLDER)/canidae
 
