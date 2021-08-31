@@ -37,6 +37,8 @@ void print_value(value val) {
             break;
         case NULL_TYPE:
             printf("null"); break;
+        case UNDEFINED_TYPE:
+            printf("undefined"); break;
         case OBJ_TYPE: print_object(val); break;
     }
 }
@@ -45,7 +47,7 @@ uint8_t value_equality(value a, value b) {
     if (a.type != b.type) return 0;
     switch (a.type) {
         case BOOL_TYPE: return AS_BOOL(a) == AS_BOOL(b);
-        case NULL_TYPE: return 1;
+        case NULL_TYPE: case UNDEFINED_TYPE: return 1;
         case NUM_TYPE: return AS_NUMBER(a) == AS_NUMBER(b);
         case OBJ_TYPE: {
             if (GET_OBJ_TYPE(a) == GET_OBJ_TYPE(b)) {

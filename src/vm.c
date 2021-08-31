@@ -207,7 +207,7 @@ static void close_upvalues(VM *vm, value *last) {
 }
 
 uint8_t is_falsey(value v) {
-    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0);
+    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0) || IS_UNDEFINED(v);
 }
 
 static uint8_t concatenate(VM *vm) {
@@ -428,6 +428,7 @@ static interpret_result run(VM *vm) {
                 double a = AS_NUMBER(pop(vm));
                 push(vm, NUMBER_VAL(pow(a, b)));
                 break;
+            case OP_UNDEFINED: push(vm, UNDEFINED_VAL); break;
             case OP_NULL: push(vm, NULL_VAL); break;
             case OP_TRUE: push(vm, BOOL_VAL(1)); break;
             case OP_FALSE: push(vm, BOOL_VAL(0)); break;
@@ -623,8 +624,8 @@ static interpret_result run(VM *vm) {
                     push(vm, v);
                     break;
                 }
-                runtime_error(vm, "Undefined property '%s'.", name->chars);
-                return INTERPRET_RUNTIME_ERROR;
+                push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                break;
             }
             case OP_GET_PROPERTY_KEEP_REF: {
                 if (!IS_INSTANCE(peek(vm, 0))) {
@@ -639,8 +640,8 @@ static interpret_result run(VM *vm) {
                     push(vm, v);
                     break;
                 }
-                runtime_error(vm, "Undefined property '%s'.", name->chars);
-                return INTERPRET_RUNTIME_ERROR;
+                push(vm, UNDEFINED_VAL);
+                break;
             }
             case OP_SET_PROPERTY: {
                 if (!IS_INSTANCE(peek(vm, 1))) {

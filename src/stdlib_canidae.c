@@ -25,6 +25,9 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
         case NULL_TYPE: {
             return OBJ_VAL(copy_string(vm, "null", 4));
         }
+        case UNDEFINED_TYPE: {
+            return OBJ_VAL(copy_string(vm, "undefined", 9));
+        }
         case BOOL_TYPE: {
             return OBJ_VAL(copy_string(vm, args[0].as.boolean ? "true" : "false", args[0].as.boolean ? 4 : 5));
         }

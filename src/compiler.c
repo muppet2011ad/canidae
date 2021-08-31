@@ -410,6 +410,7 @@ static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         case TOKEN_FALSE: emit_byte(p, c, OP_FALSE); break;
         case TOKEN_NULL: emit_byte(p, c, OP_NULL); break;
         case TOKEN_TRUE: emit_byte(p, c, OP_TRUE); break;
+        case TOKEN_UNDEFINED: emit_byte(p, c, OP_UNDEFINED); break;
         default: return;
     }
 }
@@ -947,6 +948,7 @@ parse_rule rules[] = {
     [TOKEN_LET] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_UNDEFINED] = {literal, NULL, PREC_NONE},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
