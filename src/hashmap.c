@@ -34,7 +34,7 @@ static kv_pair *find_entry(kv_pair *entries, uint32_t capacity, object_string *k
         else if (entry->k == key) {
             return entry;
         }
-        index = (index + 1) % capacity;
+        index = (index + 1) & (capacity-1);
     }
 }
 
@@ -103,7 +103,7 @@ void hashmap_copy_all(VM *vm, hashmap *from, hashmap *to) {
 object_string *hashmap_find_string(hashmap *h, const char *chars, uint32_t length, uint32_t hash) {
     if (h->count == 0) return NULL;
 
-    uint32_t index = hash % h->capacity;
+    uint32_t index = hash & (h->capacity-1);
     for (;;) {
         kv_pair *entry = &h->entries[index];
         if (entry->k == NULL) {
@@ -113,7 +113,7 @@ object_string *hashmap_find_string(hashmap *h, const char *chars, uint32_t lengt
             return entry->k;
         }
 
-        index = (index + 1) % h->capacity;
+        index = (index + 1) & (h->capacity-1);
     }
 }
 
