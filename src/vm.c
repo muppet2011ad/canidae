@@ -163,6 +163,11 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 push(vm, result);
                 return 1;
             }
+            case OBJ_CLASS: {
+                object_class *class_ = AS_CLASS(callee);
+                vm->stack_ptr[-argc - 1] = OBJ_VAL(new_instance(vm, class_));
+                return 1;
+            }
             default: runtime_error(vm, "Can only call functions."); return 0;
         }
     }

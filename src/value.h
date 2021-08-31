@@ -22,6 +22,7 @@ typedef struct object_closure object_closure;
 typedef struct object_upvalue object_upvalue;
 typedef struct object_native object_native;
 typedef struct object_class object_class;
+typedef struct object_instance object_instance;
 
 typedef struct {
     value_type type;

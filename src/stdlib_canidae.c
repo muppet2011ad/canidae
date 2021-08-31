@@ -80,6 +80,13 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     snprintf(result, len + 1, "<class %s>", class_->name->chars);
                     return OBJ_VAL(take_string(vm, result, len));
                 }
+                case OBJ_INSTANCE: {
+                    object_instance *instance = AS_INSTANCE(args[0]);
+                    long len = snprintf(NULL, 0, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
+                    char *result = malloc(len + 1);
+                    snprintf(result, len + 1, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
+                    return OBJ_VAL(take_string(vm, result, len));
+                }
                 default:
                     runtime_error(vm, "Unprintable object type (how did you even access this?)");
                     return NATIVE_ERROR_VAL;

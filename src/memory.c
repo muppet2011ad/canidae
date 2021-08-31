@@ -4,6 +4,7 @@
 #include "value.h"
 #include "object.h"
 #include "debug.h"
+#include "hashmap.h"
 
 #define GC_HEAP_GROW_FACTOR 2
 
@@ -97,6 +98,12 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_class, obj);
             break;
         }
+        case OBJ_INSTANCE: {
+            object_instance *instance = (object_instance*) obj;
+            destroy_hashmap(&instance->fields, vm);
+            FREE(vm, object_instance, obj);
+            break;
+        }
     }
 }
 
@@ -152,6 +159,12 @@ static void blacken_object(VM *vm, object *obj) {
         case OBJ_CLASS: {
             object_class *class_ = (object_class*) obj;
             mark_object(vm, (object*) class_->name);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            object_instance *instance = (object_instance*) obj;
+            mark_object(vm, (object*)instance->class_);
+            mark_hashmap(vm, &instance->fields);
             break;
         }
         case OBJ_NATIVE:

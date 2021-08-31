@@ -62,6 +62,13 @@ object_class *new_class(VM *vm, object_string *name) {
     return class_;
 }
 
+object_instance *new_instance(VM *vm, object_class *class_) {
+    object_instance *instance = ALLOCATE_OBJ(vm, object_instance, OBJ_INSTANCE);
+    instance->class_ = class_;
+    init_hashmap(&instance->fields);
+    return instance;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -196,6 +203,9 @@ void print_object(value v) {
             break;
         case OBJ_CLASS:
             printf("<class %s>", AS_CLASS(v)->name->chars);
+            break;
+        case OBJ_INSTANCE:
+            printf("<%s instance at %p>", AS_INSTANCE(v)->class_->name->chars, (void*) AS_OBJ(v));
             break;
         default:
             break;
