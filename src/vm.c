@@ -607,6 +607,52 @@ static interpret_result run(VM *vm) {
             }
             case OP_CLASS: {
                 push(vm, OBJ_VAL(new_class(vm, READ_STRING(READ_VARIABLE_CONST()))));
+                break;
+            }
+            case OP_GET_PROPERTY: {
+                if (!IS_INSTANCE(peek(vm, 0))) {
+                    runtime_error(vm, "Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                object_instance *instance = AS_INSTANCE(peek(vm, 0));
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+
+                value v;
+                if (hashmap_get(&instance->fields, name, &v)) {
+                    pop(vm);
+                    push(vm, v);
+                    break;
+                }
+                runtime_error(vm, "Undefined property '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            case OP_GET_PROPERTY_KEEP_REF: {
+                if (!IS_INSTANCE(peek(vm, 0))) {
+                    runtime_error(vm, "Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                object_instance *instance = AS_INSTANCE(peek(vm, 0));
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+
+                value v;
+                if (hashmap_get(&instance->fields, name, &v)) {
+                    push(vm, v);
+                    break;
+                }
+                runtime_error(vm, "Undefined property '%s'.", name->chars);
+                return INTERPRET_RUNTIME_ERROR;
+            }
+            case OP_SET_PROPERTY: {
+                if (!IS_INSTANCE(peek(vm, 1))) {
+                    runtime_error(vm, "Only instances have fields");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                object_instance *instance = AS_INSTANCE(peek(vm, 1));
+                hashmap_set(&instance->fields, vm, READ_STRING(READ_VARIABLE_CONST()), peek(vm, 0));
+                value v = pop(vm);
+                pop(vm);
+                push(vm, v);
+                break;
             }
         }
     }
@@ -620,6 +666,8 @@ static interpret_result run(VM *vm) {
     #undef READ_STRING
     #undef BINARY_COMPARISON
     #undef BINARY_OP
+    #undef READ_VARIABLE_ARG
+    #undef READ_VARIABLE_CONST
 }
 
 interpret_result interpret(VM *vm, const char *source) {

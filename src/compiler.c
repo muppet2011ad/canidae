@@ -109,6 +109,7 @@ static long resolve_upvalue(parser *p, compiler *c, token *name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
 static void declare_variable(parser *p, compiler *c);
+static uint8_t handle_assignment(parser *p, compiler *c, VM *vm, uint8_t var_or_arr, uint32_t arg, opcode get_op, opcode set_op);
 
 static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id, uint8_t make_function) {
     c->local_count = 0;
@@ -384,6 +385,24 @@ static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 static void call(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     uint8_t argc = argument_list(p, c, vm);
     emit_2_bytes(p, c, OP_CALL, argc);
+}
+
+static void dot(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    consume(p, TOKEN_IDENTIFIER, "Expect property name after '.'.");
+    uint32_t property_name = identifier_constant(p, c, vm, &p->prev);
+
+    uint8_t assigned = 0;
+    if (can_assign) {
+        if (!check(p, TOKEN_EQUAL)) {
+            assigned |= handle_assignment(p, c, vm, 0, property_name, OP_GET_PROPERTY_KEEP_REF, OP_SET_PROPERTY);
+        }
+        else {
+            assigned |= handle_assignment(p, c, vm, 0, property_name, OP_GET_PROPERTY, OP_SET_PROPERTY);
+        }
+    } 
+    if (!assigned) {
+        emit_variable_length_instruction(p, c, OP_GET_PROPERTY, property_name);
+    }
 }
 
 static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
@@ -893,7 +912,7 @@ parse_rule rules[] = {
     [TOKEN_LEFT_SQR] = {array_dec, array_index, PREC_PRIMARY},
     [TOKEN_RIGHT_SQR] = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
-    [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
+    [TOKEN_DOT] = {NULL, dot, PREC_CALL},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},
     [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
