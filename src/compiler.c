@@ -108,6 +108,7 @@ static void add_local(parser *p, compiler *c, token name);
 static long resolve_upvalue(parser *p, compiler *c, token *name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
+static void declare_variable(parser *p, compiler *c);
 
 static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id, uint8_t make_function) {
     c->local_count = 0;
@@ -674,6 +675,19 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     destroy_compiler(&function_compiler, vm);
 }
 
+static void class_declaration(parser *p, compiler *c, VM *vm) {
+    consume(p, TOKEN_IDENTIFIER, "Expect class name.");
+    uint32_t class_name_constant = identifier_constant(p, c, vm, &p->prev);
+    declare_variable(p, c);
+
+    emit_variable_length_instruction(p, c, OP_CLASS, class_name_constant);
+    define_variable(p, c, class_name_constant);
+
+    consume(p, TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    // Compile class body here
+    consume(p, TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+}
+
 static void function_declaration(parser *p, compiler *c, VM *vm) {
     uint32_t global = parse_variable(p, c, vm, "Expect function name.");
     mark_initialised(c);
@@ -819,7 +833,10 @@ static void synchronise(parser *p) {
 }
 
 static void declaration(parser *p, compiler *c, VM *vm) {
-    if (match(p, TOKEN_FUNCTION)) {
+    if (match(p, TOKEN_CLASS)) {
+        class_declaration(p, c, vm);
+    }
+    else if (match(p, TOKEN_FUNCTION)) {
         function_declaration(p, c, vm);
     }
     else if (match(p, TOKEN_LET)) {

@@ -600,6 +600,9 @@ static interpret_result run(VM *vm) {
                 }
                 break;
             }
+            case OP_CLASS: {
+                push(vm, OBJ_VAL(new_class(vm, READ_STRING(READ_VARIABLE_CONST()))));
+            }
         }
     }
 

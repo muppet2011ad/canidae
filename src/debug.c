@@ -83,6 +83,8 @@ static size_t long_instruction(const char *name, segment *s, size_t offset) {
             return three_byte_instruction("OP_GET_UPVALUE", s, offset);
         case OP_SET_UPVALUE:
             return three_byte_instruction("OP_SET_UPVALUE", s, offset);
+        case OP_CLASS:
+            return constant_long_instruction("OP_CLASS", s, offset);
         default:
             return 1;
     }
@@ -190,6 +192,9 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
                 printf("%08lu    |                      %s %u\n", offset - 4, is_local ? "local" : "upvalue", index);
             }
             return offset;
+        }
+        case OP_CLASS: {
+            return constant_instruction("OP_CLASS", s, offset);
         }
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);

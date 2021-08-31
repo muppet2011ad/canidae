@@ -56,6 +56,7 @@ typedef enum {
     OP_SET_LOCAL,
     OP_GET_UPVALUE,
     OP_SET_UPVALUE,
+    OP_CLASS,
 } opcode;
 
 typedef struct {
