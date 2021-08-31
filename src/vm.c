@@ -327,6 +327,12 @@ static interpret_result run(VM *vm) {
             push(vm, type(a op b)); \
         } while (0)
 
+    #define READ_VARIABLE_ARG() \
+        (vm->long_instruction ? ({vm->long_instruction = 0; READ_UINT24();}) : READ_BYTE())
+
+    #define READ_VARIABLE_CONST() \
+        (vm->long_instruction ? ({vm->long_instruction = 0; READ_CONSTANT_LONG();}) : READ_CONSTANT())
+
     #define BINARY_COMPARISON(t, op) \
         do { \
             value b = peek(vm, 0); \
@@ -501,15 +507,7 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_CONSTANT: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                push(vm, constant);
+                push(vm, READ_VARIABLE_CONST());
                 break;
             }
             case OP_POPN: {
@@ -526,29 +524,13 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_DEFINE_GLOBAL: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                object_string *name = READ_STRING(constant);
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 hashmap_set(&vm->globals, vm, name, peek(vm, 0));
                 pop(vm);
                 break;
             }
             case OP_GET_GLOBAL: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                object_string *name = READ_STRING(constant);
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 value val;
                 if (!hashmap_get(&vm->globals, name, &val)) {
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
@@ -558,15 +540,7 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_SET_GLOBAL: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                object_string *name = READ_STRING(constant);
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 if(hashmap_set(&vm->globals, vm, name, peek(vm, 0))) {
                     hashmap_delete(&vm->globals, name);
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
@@ -575,51 +549,19 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_GET_LOCAL: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                push(vm, frame->slots[arg]);
+                push(vm, frame->slots[READ_VARIABLE_ARG()]);
                 break;
             }
             case OP_SET_LOCAL: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                frame->slots[arg] = peek(vm, 0);
+                frame->slots[READ_VARIABLE_ARG()] = peek(vm, 0);
                 break;
             }
             case OP_GET_UPVALUE: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                push(vm, *frame->closure->upvalues[arg]->location);
+                push(vm, *frame->closure->upvalues[READ_VARIABLE_ARG()]->location);
                 break;
             }
             case OP_SET_UPVALUE: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                *frame->closure->upvalues[arg]->location = peek(vm, 0);
+                *frame->closure->upvalues[READ_VARIABLE_ARG()]->location = peek(vm, 0);
                 break;
             }
             case OP_JUMP_IF_FALSE: {
