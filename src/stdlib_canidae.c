@@ -30,7 +30,7 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
         }
         case OBJ_TYPE: {
             #define FN_TO_STRING(function) \
-                int len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
+                long len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
                 char *result = malloc(len+1); \
                 snprintf(result, len + 1, "<function %s>", function->name->chars); \
                 return OBJ_VAL(take_string(vm, result, len));
@@ -72,6 +72,13 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     strcat(result, "]\0");
                     return OBJ_VAL(take_string(vm, result, len));
                     #undef APPEND_VAL
+                }
+                case OBJ_CLASS: {
+                    object_class *class_ = AS_CLASS(args[0]);
+                    long len = snprintf(NULL, 0, "<class %s>", class_->name->chars);
+                    char *result = malloc(len + 1);
+                    snprintf(result, len + 1, "<class %s>", class_->name->chars);
+                    return OBJ_VAL(take_string(vm, result, len));
                 }
                 default:
                     runtime_error(vm, "Unprintable object type (how did you even access this?)");

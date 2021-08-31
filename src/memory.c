@@ -93,6 +93,11 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_upvalue, obj);
             break;
         }
+        case OBJ_CLASS: {
+            object_class *class_ = (object_class*) obj;
+            FREE(vm, object_class, obj);
+            break;
+        }
     }
 }
 
@@ -144,6 +149,11 @@ static void blacken_object(VM *vm, object *obj) {
         case OBJ_ARRAY: {
             object_array *array = (object_array*) obj;
             mark_array(vm, &array->arr);
+        }
+        case OBJ_CLASS: {
+            object_class *class_ = (object_class*) obj;
+            mark_object(vm, (object*) class_->name);
+            break;
         }
         case OBJ_NATIVE:
         case OBJ_STRING:

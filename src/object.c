@@ -56,6 +56,12 @@ object_upvalue *new_upvalue(VM *vm, value *slot) {
     return upvalue;
 }
 
+object_class *new_class(VM *vm, object_string *name) {
+    object_class *class_ = ALLOCATE_OBJ(vm, object_class, OBJ_CLASS);
+    class_->name = name;
+    return class_;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -187,6 +193,9 @@ void print_object(value v) {
             break;
         case OBJ_CLOSURE:
             print_function(AS_CLOSURE(v)->function);
+            break;
+        case OBJ_CLASS:
+            printf("<class %s>", AS_CLASS(v)->name->chars);
             break;
         default:
             break;
