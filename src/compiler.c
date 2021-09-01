@@ -695,17 +695,32 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     destroy_compiler(&function_compiler, vm);
 }
 
+static void method(parser *p, compiler *c, VM *vm) {
+    consume(p, TOKEN_FUNCTION, "Expect function declaration in class.");
+    consume(p, TOKEN_IDENTIFIER, "Expect method name.");
+    uint32_t method_name = identifier_constant(p, c, vm, &p->prev);
+
+    function(p, c, vm, TYPE_FUNCTION);
+    emit_variable_length_instruction(p, c, OP_METHOD, method_name);
+}
+
 static void class_declaration(parser *p, compiler *c, VM *vm) {
     consume(p, TOKEN_IDENTIFIER, "Expect class name.");
+    token class_name = p->prev;
     uint32_t class_name_constant = identifier_constant(p, c, vm, &p->prev);
     declare_variable(p, c);
 
     emit_variable_length_instruction(p, c, OP_CLASS, class_name_constant);
     define_variable(p, c, class_name_constant);
 
+    named_variable(p, c, vm, class_name, 0);
+
     consume(p, TOKEN_LEFT_BRACE, "Expect '{' before class body.");
-    // Compile class body here
+    while (!check(p, TOKEN_RIGHT_BRACE) && !check(p, TOKEN_EOF)) {
+        method(p, c, vm);
+    }
     consume(p, TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+    emit_byte(p, c, OP_POP);
 }
 
 static void function_declaration(parser *p, compiler *c, VM *vm) {

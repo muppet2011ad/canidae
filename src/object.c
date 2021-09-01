@@ -59,6 +59,7 @@ object_upvalue *new_upvalue(VM *vm, value *slot) {
 object_class *new_class(VM *vm, object_string *name) {
     object_class *class_ = ALLOCATE_OBJ(vm, object_class, OBJ_CLASS);
     class_->name = name;
+    init_hashmap(&class_->methods);
     return class_;
 }
 

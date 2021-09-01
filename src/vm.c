@@ -206,6 +206,13 @@ static void close_upvalues(VM *vm, value *last) {
     }
 }
 
+static void define_method(VM *vm, object_string *name) {
+    value method = peek(vm, 0);
+    object_class *class_ = AS_CLASS(peek(vm, 1));
+    hashmap_set(&class_->methods, vm, name, method);
+    pop(vm);
+}
+
 uint8_t is_falsey(value v) {
     return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0) || IS_UNDEFINED(v);
 }
@@ -653,6 +660,10 @@ static interpret_result run(VM *vm) {
                 value v = pop(vm);
                 pop(vm);
                 push(vm, v);
+                break;
+            }
+            case OP_METHOD: {
+                define_method(vm, READ_STRING(READ_VARIABLE_CONST()));
                 break;
             }
         }

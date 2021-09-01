@@ -86,6 +86,7 @@ struct object_array {
 struct object_class {
     object obj;
     object_string *name;
+    hashmap methods;
 };
 
 struct object_instance {

@@ -159,6 +159,7 @@ static void blacken_object(VM *vm, object *obj) {
         case OBJ_CLASS: {
             object_class *class_ = (object_class*) obj;
             mark_object(vm, (object*) class_->name);
+            mark_hashmap(vm, &class_->methods);
             break;
         }
         case OBJ_INSTANCE: {
