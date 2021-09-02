@@ -70,6 +70,13 @@ object_instance *new_instance(VM *vm, object_class *class_) {
     return instance;
 }
 
+object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *method) {
+    object_bound_method *bound = ALLOCATE_OBJ(vm, object_bound_method, OBJ_BOUND_METHOD);
+    bound->receiver = receiver;
+    bound->method = method;
+    return bound;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -207,6 +214,9 @@ void print_object(value v) {
             break;
         case OBJ_INSTANCE:
             printf("<%s instance at %p>", AS_INSTANCE(v)->class_->name->chars, (void*) AS_OBJ(v));
+            break;
+        case OBJ_BOUND_METHOD:
+            print_function(AS_BOUND_METHOD(v)->method->function);
             break;
         default:
             break;

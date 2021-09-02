@@ -104,6 +104,10 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_instance, obj);
             break;
         }
+        case OBJ_BOUND_METHOD: {
+            FREE(vm, object_bound_method, obj);
+            break;
+        }
     }
 }
 
@@ -166,6 +170,12 @@ static void blacken_object(VM *vm, object *obj) {
             object_instance *instance = (object_instance*) obj;
             mark_object(vm, (object*)instance->class_);
             mark_hashmap(vm, &instance->fields);
+            break;
+        }
+        case OBJ_BOUND_METHOD: {
+            object_bound_method *bound = (object_bound_method*) obj;
+            mark_value(vm, bound->receiver);
+            mark_object(vm, (object*) bound->method);
             break;
         }
         case OBJ_NATIVE:

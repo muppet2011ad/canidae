@@ -168,11 +168,27 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 vm->stack_ptr[-argc - 1] = OBJ_VAL(new_instance(vm, class_));
                 return 1;
             }
+            case OBJ_BOUND_METHOD: {
+                object_bound_method *bound = AS_BOUND_METHOD(callee);
+                return call(vm, bound->method, argc);
+            }
             default: runtime_error(vm, "Can only call functions."); return 0;
         }
     }
     runtime_error(vm, "Can only call functions.");
     return 0;
+}
+
+static uint8_t bind_method(VM *vm, object_class *class_, object_string *name, uint8_t keep_ref) {
+    value method;
+    if (!hashmap_get(&class_->methods, name, &method)) {
+        return 0;
+    }
+
+    object_bound_method *bound = new_bound_method(vm, peek(vm, 0), AS_CLOSURE(method));
+    if (!keep_ref) pop(vm);
+    push(vm, OBJ_VAL(bound));
+    return 1;
 }
 
 static object_upvalue *capture_upvalue(VM *vm, value *local) {
@@ -631,7 +647,11 @@ static interpret_result run(VM *vm) {
                     push(vm, v);
                     break;
                 }
-                push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+
+                if (!bind_method(vm, instance->class_, name, 0)){
+                    push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                    break;
+                }
                 break;
             }
             case OP_GET_PROPERTY_KEEP_REF: {
@@ -647,7 +667,10 @@ static interpret_result run(VM *vm) {
                     push(vm, v);
                     break;
                 }
-                push(vm, UNDEFINED_VAL);
+                if (!bind_method(vm, instance->class_, name, 1)){
+                    push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                    break;
+                }
                 break;
             }
             case OP_SET_PROPERTY: {

@@ -90,6 +90,9 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     snprintf(result, len + 1, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
                     return OBJ_VAL(take_string(vm, result, len));
                 }
+                case OBJ_BOUND_METHOD: {
+                    FN_TO_STRING(AS_BOUND_METHOD(args[0])->method->function);
+                }
                 default:
                     runtime_error(vm, "Unprintable object type (how did you even access this?)");
                     return NATIVE_ERROR_VAL;
