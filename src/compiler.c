@@ -48,6 +48,10 @@ typedef struct {
     size_t continue_capacity;
 } loop;
 
+typedef struct class_compiler {
+    struct class_compiler *enclosing;
+} class_compiler;
+
 typedef struct compiler {
     local *locals;
     long local_count;
@@ -62,6 +66,7 @@ typedef struct compiler {
     uint32_t upvalue_count;
     uint32_t upvalue_capacity;
     upvalue *upvalues;
+    class_compiler *current_class;
 } compiler;
 
 typedef enum {
@@ -126,6 +131,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->upvalue_capacity = 0;
     c->upvalue_count = 0;
     c->upvalues = NULL;
+    c->current_class = NULL;
     if (make_function) c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
     t.start = "";
@@ -525,6 +531,10 @@ static void variable(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 }
 
 static void this_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    if (c->current_class == NULL) {
+        error(p, "Can't use 'this' outside of a class.");
+        return;
+    }
     variable(p, c, vm, 0);
 }
 
@@ -677,6 +687,7 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
     init_compiler(p, &function_compiler, vm, type, &p->prev, 1);
     function_compiler.enclosing = c;
+    function_compiler.current_class = c->current_class;
     begin_scope(&function_compiler);
     mark_initialised(&function_compiler);
     consume(p, TOKEN_LEFT_PAREN, "Expect '(' after function name.");
@@ -723,6 +734,10 @@ static void class_declaration(parser *p, compiler *c, VM *vm) {
     emit_variable_length_instruction(p, c, OP_CLASS, class_name_constant);
     define_variable(p, c, class_name_constant);
 
+    class_compiler class_c;
+    class_c.enclosing = c->current_class;
+    c->current_class = &class_c;
+
     named_variable(p, c, vm, class_name, 0);
 
     consume(p, TOKEN_LEFT_BRACE, "Expect '{' before class body.");
@@ -731,6 +746,7 @@ static void class_declaration(parser *p, compiler *c, VM *vm) {
     }
     consume(p, TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
     emit_byte(p, c, OP_POP);
+    c->current_class = c->current_class->enclosing;
 }
 
 static void function_declaration(parser *p, compiler *c, VM *vm) {
