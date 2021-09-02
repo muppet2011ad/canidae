@@ -170,6 +170,7 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
             }
             case OBJ_BOUND_METHOD: {
                 object_bound_method *bound = AS_BOUND_METHOD(callee);
+                vm->stack_ptr[-argc - 1] = bound->receiver;
                 return call(vm, bound->method, argc);
             }
             default: runtime_error(vm, "Can only call functions."); return 0;

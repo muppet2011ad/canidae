@@ -33,6 +33,7 @@ typedef struct {
 typedef enum {
     TYPE_FUNCTION,
     TYPE_SCRIPT,
+    TYPE_METHOD,
 } function_type;
 
 typedef struct {
@@ -130,8 +131,13 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     t.start = "";
     t.length = 0;
     add_local(p, c, t);
-    c->locals[c->local_count-1].depth = 0;
-    c->locals[c->local_count-1].is_captured = 0;
+    local *l = &c->locals[c->local_count-1];
+    l->depth = 0;
+    l->is_captured = 0;
+    if (type == TYPE_METHOD) {
+        l->name.start = "this";
+        l->name.length = 4;
+    }
     if (type != TYPE_SCRIPT) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
@@ -518,6 +524,10 @@ static void variable(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     named_variable(p, c, vm, p->prev, can_assign);
 }
 
+static void this_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    variable(p, c, vm, 0);
+}
+
 static void unary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     token_type operator = p->prev.type;
     parse_precedence(p, c, vm, PREC_UNARY);
@@ -700,7 +710,7 @@ static void method(parser *p, compiler *c, VM *vm) {
     consume(p, TOKEN_IDENTIFIER, "Expect method name.");
     uint32_t method_name = identifier_constant(p, c, vm, &p->prev);
 
-    function(p, c, vm, TYPE_FUNCTION);
+    function(p, c, vm, TYPE_METHOD);
     emit_variable_length_instruction(p, c, OP_METHOD, method_name);
 }
 
@@ -958,7 +968,7 @@ parse_rule rules[] = {
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_THIS] = {NULL, NULL, PREC_NONE},
+    [TOKEN_THIS] = {this_, NULL, PREC_NONE},
     [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
     [TOKEN_LET] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
