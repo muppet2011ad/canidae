@@ -126,6 +126,8 @@ static void mark_roots(VM *vm) {
     for (object_upvalue *upval = vm->open_upvalues; upval != NULL; upval = upval->next) { // Mark upvalues
         mark_object(vm, (object*)upval);
     }
+
+    mark_object(vm, (object*)vm->init_string);
 }
 
 static void mark_array(VM *vm, value_array *arr) {

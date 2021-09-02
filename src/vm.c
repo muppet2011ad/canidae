@@ -65,6 +65,8 @@ void init_VM(VM *vm) {
     init_hashmap(&vm->globals);
     reset_stack(vm);
     define_stdlib(vm);
+    vm->init_string = NULL;
+    vm->init_string = copy_string(vm, "__init__", 8);
 }
 
 void destroy_VM(VM *vm) {
@@ -73,6 +75,7 @@ void destroy_VM(VM *vm) {
     free_objects(vm, vm->objects);
     free(vm->stack);
     free(vm->grey_stack);
+    vm->init_string = NULL;
 }
 
 void enable_gc(VM *vm) {
@@ -166,6 +169,13 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
             case OBJ_CLASS: {
                 object_class *class_ = AS_CLASS(callee);
                 vm->stack_ptr[-argc - 1] = OBJ_VAL(new_instance(vm, class_));
+                value initialiser;
+                if(hashmap_get(&class_->methods, vm->init_string, &initialiser)) {
+                    return call(vm, AS_CLOSURE(initialiser), argc);
+                } else if (argc != 0) {
+                    runtime_error(vm, "Expected 0 arguments (got %u).", argc);
+                    return 0;
+                }
                 return 1;
             }
             case OBJ_BOUND_METHOD: {

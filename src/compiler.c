@@ -34,6 +34,7 @@ typedef enum {
     TYPE_FUNCTION,
     TYPE_SCRIPT,
     TYPE_METHOD,
+    TYPE_INITIALISER,
 } function_type;
 
 typedef struct {
@@ -140,7 +141,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     local *l = &c->locals[c->local_count-1];
     l->depth = 0;
     l->is_captured = 0;
-    if (type == TYPE_METHOD) {
+    if (type == TYPE_METHOD || type == TYPE_INITIALISER) {
         l->name.start = "this";
         l->name.length = 4;
     }
@@ -277,7 +278,12 @@ static void emit_loop(parser *p, compiler *c, size_t loop_start) {
 }
 
 static void emit_return(parser *p, compiler *c) {
-    emit_byte(p, c, OP_NULL);
+    if (c->type == TYPE_INITIALISER) {
+        emit_variable_length_instruction(p, c, OP_GET_LOCAL, 0);
+    }
+    else {
+        emit_byte(p, c, OP_NULL);
+    }
     emit_byte(p, c, OP_RETURN);
 }
 
@@ -721,7 +727,11 @@ static void method(parser *p, compiler *c, VM *vm) {
     consume(p, TOKEN_IDENTIFIER, "Expect method name.");
     uint32_t method_name = identifier_constant(p, c, vm, &p->prev);
 
-    function(p, c, vm, TYPE_METHOD);
+    function_type type = TYPE_METHOD;
+
+    if (p->prev.length == 8 && memcmp(p->prev.start, "__init__", 8) == 0) type = TYPE_INITIALISER;
+
+    function(p, c, vm, type);
     emit_variable_length_instruction(p, c, OP_METHOD, method_name);
 }
 
@@ -866,6 +876,9 @@ static void return_statement(parser *p, compiler *c, VM *vm) {
         emit_return(p, c);
     }
     else {
+        if (c->type == TYPE_INITIALISER) {
+            error(p, "Can't return a value from an initialiser.");
+        }
         expression(p, c, vm);
         consume(p, TOKEN_SEMICOLON, "Expect ';' after return value.");
         emit_byte(p, c, OP_RETURN);
