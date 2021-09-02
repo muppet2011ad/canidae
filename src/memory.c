@@ -95,6 +95,8 @@ static void free_object(VM *vm, object *obj) {
             break;
         }
         case OBJ_CLASS: {
+            object_class *class_ = (object_class*) obj;
+            destroy_hashmap(&class_->methods, vm);
             FREE(vm, object_class, obj);
             break;
         }
