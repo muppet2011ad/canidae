@@ -419,7 +419,14 @@ static void dot(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         }
     } 
     if (!assigned) {
-        emit_variable_length_instruction(p, c, OP_GET_PROPERTY, property_name);
+        if (match(p, TOKEN_LEFT_PAREN)) {
+            uint8_t argc = argument_list(p, c, vm);
+            emit_variable_length_instruction(p, c, OP_INVOKE, property_name);
+            emit_byte(p, c, argc);
+        }
+        else {
+            emit_variable_length_instruction(p, c, OP_GET_PROPERTY, property_name);
+        }
     }
 }
 

@@ -190,6 +190,34 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
     return 0;
 }
 
+static uint8_t invoke_from_class(VM *vm, object_class *class_, object_string *name, uint8_t argc) {
+    value method;
+    if (!hashmap_get(&class_->methods, name, &method)) {
+        runtime_error("Undefined property '%s'.", name->chars);
+        return 0;
+    }
+    return call(vm, AS_CLOSURE(method), argc);
+}
+
+static uint8_t invoke(VM *vm, object_string *name, uint8_t argc) {
+    value receiver = peek(vm, argc);
+
+    if (!IS_INSTANCE(receiver)) {
+        runtime_error(vm, "Only instances have methods.");
+        return 0;
+    }
+
+    object_instance *instance = AS_INSTANCE(receiver);
+
+    value v;
+    if (hashmap_get(&instance->fields, name, &v)) {
+        vm->stack_ptr[-argc - 1] = v;
+        return call_value(vm, v, argc);
+    }
+
+    return invoke_from_class(vm, instance->class_, name, argc);
+}
+
 static uint8_t bind_method(VM *vm, object_class *class_, object_string *name, uint8_t keep_ref) {
     value method;
     if (!hashmap_get(&class_->methods, name, &method)) {
@@ -698,6 +726,15 @@ static interpret_result run(VM *vm) {
             }
             case OP_METHOD: {
                 define_method(vm, READ_STRING(READ_VARIABLE_CONST()));
+                break;
+            }
+            case OP_INVOKE: {
+                object_string *method = READ_STRING(READ_VARIABLE_CONST());
+                uint8_t argc = READ_BYTE();
+                if (!invoke(vm, method, argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
         }

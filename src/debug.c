@@ -56,6 +56,16 @@ static size_t constant_long_instruction(const char *name, segment *s, size_t off
     return offset + 4;
 }
 
+static size_t invoke_instruction(const char *name, segment *s, size_t offset, uint8_t is_long) {
+    uint32_t constant = is_long ? (s->bytecode[offset+1] << 16) + (s->bytecode[offset+2] << 8) + (s->bytecode[offset+3]) : s->bytecode[offset+1];
+    offset = is_long ? offset + 4 : offset + 2;
+    uint8_t argc = s->bytecode[offset];
+    printf("%-16s %5u '", name, constant);
+    print_value(s->constants.values[constant]);
+    printf("' (%u args)\n", argc);
+    return offset + 1;
+}
+
 static size_t long_instruction(const char *name, segment *s, size_t offset) {
     printf("(%s)\n", name);
     offset++;
@@ -93,6 +103,8 @@ static size_t long_instruction(const char *name, segment *s, size_t offset) {
             return constant_long_instruction("OP_SET_PROPERTY", s, offset);
         case OP_METHOD:
             return constant_long_instruction("OP_METHOD", s, offset);
+        case OP_INVOKE:
+            return invoke_instruction("OP_INVOKE", s, offset, 1);
         default:
             return 1;
     }
@@ -217,6 +229,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
         }
         case OP_METHOD:
             return constant_instruction("OP_METHOD", s, offset);
+        case OP_INVOKE:
+            return invoke_instruction("OP_INVOKE", s, offset, 0);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;
