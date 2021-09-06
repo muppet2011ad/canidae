@@ -193,7 +193,7 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
 static uint8_t invoke_from_class(VM *vm, object_class *class_, object_string *name, uint8_t argc) {
     value method;
     if (!hashmap_get(&class_->methods, name, &method)) {
-        runtime_error("Undefined property '%s'.", name->chars);
+        runtime_error(vm, "Undefined property '%s'.", name->chars);
         return 0;
     }
     return call(vm, AS_CLOSURE(method), argc);
@@ -574,6 +574,17 @@ static interpret_result run(VM *vm) {
                 vm->long_instruction = 1;
                 break;
             }
+            case OP_INHERIT: {
+                value superclass = peek(vm, 1);
+                object_class *subclass = AS_CLASS(peek(vm, 0));
+                if (!IS_CLASS(superclass)) {
+                    runtime_error(vm, "Can only inherit from class.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                hashmap_copy_all(vm, &AS_CLASS(superclass)->methods, &subclass->methods);
+                pop(vm); // Pops subclass
+                break;
+            }
             case OP_CONSTANT: {
                 push(vm, READ_VARIABLE_CONST());
                 break;
@@ -735,6 +746,24 @@ static interpret_result run(VM *vm) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
+            case OP_GET_SUPER: {
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                object_class *superclass = AS_CLASS(pop(vm));
+                if (!bind_method(vm, superclass, name, 0)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_INVOKE_SUPER: {
+                object_string *method = READ_STRING(READ_VARIABLE_CONST());
+                uint8_t argc = READ_BYTE();
+                object_class *superclass = AS_CLASS(pop(vm));
+                if (!invoke_from_class(vm, superclass, method, argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm->frames[vm->frame_count-1];
                 break;
             }
         }

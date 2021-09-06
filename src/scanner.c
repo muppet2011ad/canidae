@@ -140,7 +140,13 @@ static token_type identifier_type(scanner *s) {
                 }
             }
             break;
-        case 'i': return check_keyword(s, 1, 1, "f", TOKEN_IF);
+        case 'i': 
+            if (s->current - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'f': return check_keyword(s, 2, 0, "", TOKEN_IF);
+                    case 'n': return check_keyword(s, 2, 6, "herits", TOKEN_INHERITS);
+                }
+            }
         case 'l': return check_keyword(s, 1, 2, "et", TOKEN_LET);
         case 'n': return check_keyword(s, 1, 3, "ull", TOKEN_NULL);
         case 'o': return check_keyword(s, 1, 1, "r", TOKEN_OR);

@@ -105,6 +105,10 @@ static size_t long_instruction(const char *name, segment *s, size_t offset) {
             return constant_long_instruction("OP_METHOD", s, offset);
         case OP_INVOKE:
             return invoke_instruction("OP_INVOKE", s, offset, 1);
+        case OP_GET_SUPER:
+            return constant_long_instruction("OP_GET_SUPER", s, offset);
+        case OP_INVOKE_SUPER:
+            return invoke_instruction("OP_INVOKE_SUPER", s, offset, 1);
         default:
             return 1;
     }
@@ -170,6 +174,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_CLOSE_UPVALUE", offset);
         case OP_LONG:
             return long_instruction("OP_LONG", s, offset);
+        case OP_INHERIT:
+            return simple_instruction("OP_INHERIT", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
@@ -231,6 +237,10 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return constant_instruction("OP_METHOD", s, offset);
         case OP_INVOKE:
             return invoke_instruction("OP_INVOKE", s, offset, 0);
+        case OP_GET_SUPER:
+            return constant_instruction("OP_GET_SUPER", s, offset);
+        case OP_INVOKE_SUPER:
+            return invoke_instruction("OP_INVOKE_SUPER", s, offset, 0);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

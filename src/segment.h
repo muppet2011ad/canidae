@@ -37,6 +37,7 @@ typedef enum {
     OP_ARRAY_SET,
     OP_CLOSE_UPVALUE,
     OP_LONG,
+    OP_INHERIT,
     // One-byte operand
     OP_POPN,
     OP_CALL,
@@ -63,6 +64,8 @@ typedef enum {
     OP_SET_PROPERTY,
     OP_METHOD,
     OP_INVOKE, // Variable length with an extra byte for the number of arguments
+    OP_GET_SUPER,
+    OP_INVOKE_SUPER, // Variable length with an extra byte for the number of arguments
 } opcode;
 
 typedef struct {
