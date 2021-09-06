@@ -18,7 +18,7 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
         case NUM_TYPE: {
             double number = AS_NUMBER(args[0]);
             int len = snprintf(NULL, 0, "%g", number);
-            char *result = malloc(len+1);
+            char *result = ALLOCATE(vm, char, len + 1);
             snprintf(result, len + 1, "%g", number);
             return OBJ_VAL(take_string(vm, result, len));
         }
@@ -34,7 +34,7 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
         case OBJ_TYPE: {
             #define FN_TO_STRING(function) \
                 long len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
-                char *result = malloc(len+1); \
+                char *result = ALLOCATE(vm, char, len + 1); \
                 snprintf(result, len + 1, "<function %s>", function->name->chars); \
                 return OBJ_VAL(take_string(vm, result, len));
             switch (GET_OBJ_TYPE(args[0])) {
@@ -57,13 +57,13 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                         if (newlen > capacity) { \
                             size_t oldc = capacity; \
                             capacity = GROW_CAPACITY(oldc); \
-                            result = realloc(result, capacity); \
+                            result = GROW_ARRAY(vm, char, result, oldc, capacity); \
                         } \
                         strcat(result, item_as_str->chars);
                     object_array *array = AS_ARRAY(args[0]);
                     size_t capacity = 2;
                     size_t len = 2;
-                    char *result = malloc(capacity);
+                    char *result = ALLOCATE(vm, char, capacity);
                     strcpy(result, "[");
                     for (size_t i = 0; i < array->arr.len-1; i++) {
                         APPEND_VAL(i);
@@ -79,14 +79,14 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                 case OBJ_CLASS: {
                     object_class *class_ = AS_CLASS(args[0]);
                     long len = snprintf(NULL, 0, "<class %s>", class_->name->chars);
-                    char *result = malloc(len + 1);
+                    char *result = ALLOCATE(vm, char, len + 1);
                     snprintf(result, len + 1, "<class %s>", class_->name->chars);
                     return OBJ_VAL(take_string(vm, result, len));
                 }
                 case OBJ_INSTANCE: {
                     object_instance *instance = AS_INSTANCE(args[0]);
                     long len = snprintf(NULL, 0, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
-                    char *result = malloc(len + 1);
+                    char *result = ALLOCATE(vm, char, len + 1);
                     snprintf(result, len + 1, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
                     return OBJ_VAL(take_string(vm, result, len));
                 }
