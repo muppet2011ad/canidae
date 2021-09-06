@@ -56,6 +56,16 @@ static size_t constant_long_instruction(const char *name, segment *s, size_t off
     return offset + 4;
 }
 
+static size_t invoke_instruction(const char *name, segment *s, size_t offset, uint8_t is_long) {
+    uint32_t constant = is_long ? (s->bytecode[offset+1] << 16) + (s->bytecode[offset+2] << 8) + (s->bytecode[offset+3]) : s->bytecode[offset+1];
+    offset = is_long ? offset + 4 : offset + 2;
+    uint8_t argc = s->bytecode[offset];
+    printf("%-16s %5u '", name, constant);
+    print_value(s->constants.values[constant]);
+    printf("' (%u args)\n", argc);
+    return offset + 1;
+}
+
 static size_t long_instruction(const char *name, segment *s, size_t offset) {
     printf("(%s)\n", name);
     offset++;
@@ -83,6 +93,22 @@ static size_t long_instruction(const char *name, segment *s, size_t offset) {
             return three_byte_instruction("OP_GET_UPVALUE", s, offset);
         case OP_SET_UPVALUE:
             return three_byte_instruction("OP_SET_UPVALUE", s, offset);
+        case OP_CLASS:
+            return constant_long_instruction("OP_CLASS", s, offset);
+        case OP_GET_PROPERTY:
+            return constant_long_instruction("OP_GET_PROPERTY", s, offset);
+        case OP_GET_PROPERTY_KEEP_REF:
+            return constant_long_instruction("OP_GET_PROPERTY_KEEP_REF", s, offset);
+        case OP_SET_PROPERTY:
+            return constant_long_instruction("OP_SET_PROPERTY", s, offset);
+        case OP_METHOD:
+            return constant_long_instruction("OP_METHOD", s, offset);
+        case OP_INVOKE:
+            return invoke_instruction("OP_INVOKE", s, offset, 1);
+        case OP_GET_SUPER:
+            return constant_long_instruction("OP_GET_SUPER", s, offset);
+        case OP_INVOKE_SUPER:
+            return invoke_instruction("OP_INVOKE_SUPER", s, offset, 1);
         default:
             return 1;
     }
@@ -112,6 +138,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_DIVIDE", offset);
         case OP_POWER:
             return simple_instruction("OP_POWER", offset);
+        case OP_UNDEFINED:
+            return simple_instruction("OP_UNDEFINED", offset);
         case OP_NULL:
             return simple_instruction("OP_NULL", offset);
         case OP_TRUE:
@@ -146,6 +174,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_CLOSE_UPVALUE", offset);
         case OP_LONG:
             return long_instruction("OP_LONG", s, offset);
+        case OP_INHERIT:
+            return simple_instruction("OP_INHERIT", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
@@ -191,6 +221,26 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             }
             return offset;
         }
+        case OP_CLASS: {
+            return constant_instruction("OP_CLASS", s, offset);
+        }
+        case OP_GET_PROPERTY: {
+            return constant_instruction("OP_GET_PROPERTY", s, offset);
+        }
+        case OP_GET_PROPERTY_KEEP_REF: {
+            return constant_instruction("OP_GET_PROPERTY_KEEP_REF", s, offset);
+        }
+        case OP_SET_PROPERTY: {
+            return constant_instruction("OP_SET_PROPERTY", s, offset);
+        }
+        case OP_METHOD:
+            return constant_instruction("OP_METHOD", s, offset);
+        case OP_INVOKE:
+            return invoke_instruction("OP_INVOKE", s, offset, 0);
+        case OP_GET_SUPER:
+            return constant_instruction("OP_GET_SUPER", s, offset);
+        case OP_INVOKE_SUPER:
+            return invoke_instruction("OP_INVOKE_SUPER", s, offset, 0);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

@@ -19,6 +19,7 @@ typedef enum {
     OP_MULTIPLY,
     OP_DIVIDE,
     OP_POWER,
+    OP_UNDEFINED,
     OP_NULL,
     OP_TRUE,
     OP_FALSE,
@@ -36,6 +37,7 @@ typedef enum {
     OP_ARRAY_SET,
     OP_CLOSE_UPVALUE,
     OP_LONG,
+    OP_INHERIT,
     // One-byte operand
     OP_POPN,
     OP_CALL,
@@ -56,6 +58,14 @@ typedef enum {
     OP_SET_LOCAL,
     OP_GET_UPVALUE,
     OP_SET_UPVALUE,
+    OP_CLASS,
+    OP_GET_PROPERTY,
+    OP_GET_PROPERTY_KEEP_REF,
+    OP_SET_PROPERTY,
+    OP_METHOD,
+    OP_INVOKE, // Variable length with an extra byte for the number of arguments
+    OP_GET_SUPER,
+    OP_INVOKE_SUPER, // Variable length with an extra byte for the number of arguments
 } opcode;
 
 typedef struct {

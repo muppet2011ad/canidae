@@ -33,6 +33,8 @@ typedef struct {
 typedef enum {
     TYPE_FUNCTION,
     TYPE_SCRIPT,
+    TYPE_METHOD,
+    TYPE_INITIALISER,
 } function_type;
 
 typedef struct {
@@ -46,6 +48,11 @@ typedef struct {
     size_t num_continues;
     size_t continue_capacity;
 } loop;
+
+typedef struct class_compiler {
+    struct class_compiler *enclosing;
+    uint8_t has_superclass;
+} class_compiler;
 
 typedef struct compiler {
     local *locals;
@@ -61,6 +68,7 @@ typedef struct compiler {
     uint32_t upvalue_count;
     uint32_t upvalue_capacity;
     upvalue *upvalues;
+    class_compiler *current_class;
 } compiler;
 
 typedef enum {
@@ -108,6 +116,9 @@ static void add_local(parser *p, compiler *c, token name);
 static long resolve_upvalue(parser *p, compiler *c, token *name);
 static void define_variable(parser *p, compiler *c, uint32_t global);
 static uint8_t argument_list(parser *p, compiler *c, VM *vm);
+static void declare_variable(parser *p, compiler *c);
+static uint8_t handle_assignment(parser *p, compiler *c, VM *vm, uint8_t var_or_arr, uint32_t arg, opcode get_op, opcode set_op);
+static uint8_t identifiers_equal(token *a, token *b);
 
 static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, token *id, uint8_t make_function) {
     c->local_count = 0;
@@ -123,13 +134,19 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->upvalue_capacity = 0;
     c->upvalue_count = 0;
     c->upvalues = NULL;
+    c->current_class = NULL;
     if (make_function) c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
     t.start = "";
     t.length = 0;
     add_local(p, c, t);
-    c->locals[c->local_count-1].depth = 0;
-    c->locals[c->local_count-1].is_captured = 0;
+    local *l = &c->locals[c->local_count-1];
+    l->depth = 0;
+    l->is_captured = 0;
+    if (type == TYPE_METHOD || type == TYPE_INITIALISER) {
+        l->name.start = "this";
+        l->name.length = 4;
+    }
     if (type != TYPE_SCRIPT) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
@@ -263,7 +280,12 @@ static void emit_loop(parser *p, compiler *c, size_t loop_start) {
 }
 
 static void emit_return(parser *p, compiler *c) {
-    emit_byte(p, c, OP_NULL);
+    if (c->type == TYPE_INITIALISER) {
+        emit_variable_length_instruction(p, c, OP_GET_LOCAL, 0);
+    }
+    else {
+        emit_byte(p, c, OP_NULL);
+    }
     emit_byte(p, c, OP_RETURN);
 }
 
@@ -385,11 +407,37 @@ static void call(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     emit_2_bytes(p, c, OP_CALL, argc);
 }
 
+static void dot(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    consume(p, TOKEN_IDENTIFIER, "Expect property name after '.'.");
+    uint32_t property_name = identifier_constant(p, c, vm, &p->prev);
+
+    uint8_t assigned = 0;
+    if (can_assign) {
+        if (!check(p, TOKEN_EQUAL)) {
+            assigned |= handle_assignment(p, c, vm, 0, property_name, OP_GET_PROPERTY_KEEP_REF, OP_SET_PROPERTY);
+        }
+        else {
+            assigned |= handle_assignment(p, c, vm, 0, property_name, OP_GET_PROPERTY, OP_SET_PROPERTY);
+        }
+    } 
+    if (!assigned) {
+        if (match(p, TOKEN_LEFT_PAREN)) {
+            uint8_t argc = argument_list(p, c, vm);
+            emit_variable_length_instruction(p, c, OP_INVOKE, property_name);
+            emit_byte(p, c, argc);
+        }
+        else {
+            emit_variable_length_instruction(p, c, OP_GET_PROPERTY, property_name);
+        }
+    }
+}
+
 static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     switch (p->prev.type) {
         case TOKEN_FALSE: emit_byte(p, c, OP_FALSE); break;
         case TOKEN_NULL: emit_byte(p, c, OP_NULL); break;
         case TOKEN_TRUE: emit_byte(p, c, OP_TRUE); break;
+        case TOKEN_UNDEFINED: emit_byte(p, c, OP_UNDEFINED); break;
         default: return;
     }
 }
@@ -495,6 +543,44 @@ static void named_variable(parser *p, compiler *c, VM *vm, token name, uint8_t c
 
 static void variable(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     named_variable(p, c, vm, p->prev, can_assign);
+}
+
+static token synthetic_token(const char *text) {
+    token t;
+    t.start = text;
+    t.length = strlen(text);
+    return t;
+}
+
+static void super_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    if (c->current_class == NULL) {
+        error(p, "Can't use 'super' outside of a class.");
+    }
+    else if (!c->current_class->has_superclass) {
+        error(p, "Can't use 'super' in a class with no superclass.");
+    }
+    consume(p, TOKEN_DOT, "Expect '.' after 'super'.");
+    consume(p, TOKEN_IDENTIFIER, "Expect superclass method name.");
+    uint32_t name = identifier_constant(p, c, vm, &p->prev);
+
+    named_variable(p, c, vm, synthetic_token("this"), 0);
+    if (match(p, TOKEN_LEFT_PAREN)) {
+        uint8_t argc = argument_list(p, c, vm);
+        named_variable(p, c, vm, synthetic_token("super"), 0);
+        emit_variable_length_instruction(p, c, OP_INVOKE_SUPER, name);
+        emit_byte(p, c, argc);
+    } else {
+        named_variable(p, c, vm, synthetic_token("super"), 0);
+        emit_variable_length_instruction(p, c, OP_GET_SUPER, name);
+    }
+}
+
+static void this_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    if (c->current_class == NULL) {
+        error(p, "Can't use 'this' outside of a class.");
+        return;
+    }
+    variable(p, c, vm, 0);
 }
 
 static void unary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
@@ -646,6 +732,7 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
     compiler function_compiler;
     init_compiler(p, &function_compiler, vm, type, &p->prev, 1);
     function_compiler.enclosing = c;
+    function_compiler.current_class = c->current_class;
     begin_scope(&function_compiler);
     mark_initialised(&function_compiler);
     consume(p, TOKEN_LEFT_PAREN, "Expect '(' after function name.");
@@ -672,6 +759,61 @@ static void function(parser *p, compiler *c, VM *vm, function_type type) {
         emit_bytes(p, c, bytes, 4);
     }
     destroy_compiler(&function_compiler, vm);
+}
+
+static void method(parser *p, compiler *c, VM *vm) {
+    consume(p, TOKEN_FUNCTION, "Expect function declaration in class.");
+    consume(p, TOKEN_IDENTIFIER, "Expect method name.");
+    uint32_t method_name = identifier_constant(p, c, vm, &p->prev);
+
+    function_type type = TYPE_METHOD;
+
+    if (p->prev.length == 8 && memcmp(p->prev.start, "__init__", 8) == 0) type = TYPE_INITIALISER;
+
+    function(p, c, vm, type);
+    emit_variable_length_instruction(p, c, OP_METHOD, method_name);
+}
+
+static void class_declaration(parser *p, compiler *c, VM *vm) {
+    consume(p, TOKEN_IDENTIFIER, "Expect class name.");
+    token class_name = p->prev;
+    uint32_t class_name_constant = identifier_constant(p, c, vm, &p->prev);
+    declare_variable(p, c);
+
+    emit_variable_length_instruction(p, c, OP_CLASS, class_name_constant);
+    define_variable(p, c, class_name_constant);
+
+    class_compiler class_c;
+    class_c.enclosing = c->current_class;
+    c->current_class = &class_c;
+    class_c.has_superclass = 0;
+
+    if (match(p, TOKEN_INHERITS)) {
+        consume(p, TOKEN_IDENTIFIER, "Expect superclass name.");
+        variable(p, c, vm, 0);
+        if (identifiers_equal(&class_name, &p->prev)) error(p, "A class can't inherit from itself.");
+
+        begin_scope(c);
+        add_local(p, c, synthetic_token("super"));
+        define_variable(p, c, 0);
+
+        named_variable(p, c, vm, class_name, 0);
+        emit_byte(p, c, OP_INHERIT);
+        class_c.has_superclass = 1;
+    }
+
+    named_variable(p, c, vm, class_name, 0);
+
+    consume(p, TOKEN_LEFT_BRACE, "Expect '{' before class body.");
+    while (!check(p, TOKEN_RIGHT_BRACE) && !check(p, TOKEN_EOF)) {
+        method(p, c, vm);
+    }
+    consume(p, TOKEN_RIGHT_BRACE, "Expect '}' after class body.");
+    emit_byte(p, c, OP_POP);
+
+    if (class_c.has_superclass) end_scope(p, c);
+
+    c->current_class = c->current_class->enclosing;
 }
 
 static void function_declaration(parser *p, compiler *c, VM *vm) {
@@ -791,6 +933,9 @@ static void return_statement(parser *p, compiler *c, VM *vm) {
         emit_return(p, c);
     }
     else {
+        if (c->type == TYPE_INITIALISER) {
+            error(p, "Can't return a value from an initialiser.");
+        }
         expression(p, c, vm);
         consume(p, TOKEN_SEMICOLON, "Expect ';' after return value.");
         emit_byte(p, c, OP_RETURN);
@@ -819,7 +964,10 @@ static void synchronise(parser *p) {
 }
 
 static void declaration(parser *p, compiler *c, VM *vm) {
-    if (match(p, TOKEN_FUNCTION)) {
+    if (match(p, TOKEN_CLASS)) {
+        class_declaration(p, c, vm);
+    }
+    else if (match(p, TOKEN_FUNCTION)) {
         function_declaration(p, c, vm);
     }
     else if (match(p, TOKEN_LET)) {
@@ -876,7 +1024,7 @@ parse_rule rules[] = {
     [TOKEN_LEFT_SQR] = {array_dec, array_index, PREC_PRIMARY},
     [TOKEN_RIGHT_SQR] = {NULL, NULL, PREC_NONE},
     [TOKEN_COMMA] = {NULL, NULL, PREC_NONE},
-    [TOKEN_DOT] = {NULL, NULL, PREC_NONE},
+    [TOKEN_DOT] = {NULL, dot, PREC_CALL},
     [TOKEN_MINUS] = {unary, binary, PREC_TERM},
     [TOKEN_PLUS] = {NULL, binary, PREC_TERM},
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
@@ -905,12 +1053,13 @@ parse_rule rules[] = {
     [TOKEN_OR] = {NULL, or_, PREC_OR},
     [TOKEN_PRINT] = {NULL, NULL, PREC_NONE},
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
-    [TOKEN_SUPER] = {NULL, NULL, PREC_NONE},
-    [TOKEN_THIS] = {NULL, NULL, PREC_NONE},
+    [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
+    [TOKEN_THIS] = {this_, NULL, PREC_NONE},
     [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
     [TOKEN_LET] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
+    [TOKEN_UNDEFINED] = {literal, NULL, PREC_NONE},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };

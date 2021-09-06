@@ -25,12 +25,15 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
         case NULL_TYPE: {
             return OBJ_VAL(copy_string(vm, "null", 4));
         }
+        case UNDEFINED_TYPE: {
+            return OBJ_VAL(copy_string(vm, "undefined", 9));
+        }
         case BOOL_TYPE: {
             return OBJ_VAL(copy_string(vm, args[0].as.boolean ? "true" : "false", args[0].as.boolean ? 4 : 5));
         }
         case OBJ_TYPE: {
             #define FN_TO_STRING(function) \
-                int len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
+                long len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
                 char *result = malloc(len+1); \
                 snprintf(result, len + 1, "<function %s>", function->name->chars); \
                 return OBJ_VAL(take_string(vm, result, len));
@@ -72,6 +75,23 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     strcat(result, "]\0");
                     return OBJ_VAL(take_string(vm, result, len));
                     #undef APPEND_VAL
+                }
+                case OBJ_CLASS: {
+                    object_class *class_ = AS_CLASS(args[0]);
+                    long len = snprintf(NULL, 0, "<class %s>", class_->name->chars);
+                    char *result = malloc(len + 1);
+                    snprintf(result, len + 1, "<class %s>", class_->name->chars);
+                    return OBJ_VAL(take_string(vm, result, len));
+                }
+                case OBJ_INSTANCE: {
+                    object_instance *instance = AS_INSTANCE(args[0]);
+                    long len = snprintf(NULL, 0, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
+                    char *result = malloc(len + 1);
+                    snprintf(result, len + 1, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
+                    return OBJ_VAL(take_string(vm, result, len));
+                }
+                case OBJ_BOUND_METHOD: {
+                    FN_TO_STRING(AS_BOUND_METHOD(args[0])->method->function);
                 }
                 default:
                     runtime_error(vm, "Unprintable object type (how did you even access this?)");

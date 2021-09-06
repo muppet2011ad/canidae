@@ -1,0 +1,26 @@
+class Basic {
+    function printme() {
+        print "I'm a basic class with no initialiser.";
+    }
+}
+
+class Point {
+    function __init__(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    function printme() {
+        println("(", this.x, ", ", this.y, ")");
+    }
+}
+
+let b = Basic();
+b.printme();
+
+let p1 = Point(3, 6);
+let p2 = Point(5, 2);
+
+p1.printme();
+let p2printer = p2.printme;
+p2printer();

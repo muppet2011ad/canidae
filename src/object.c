@@ -56,6 +56,27 @@ object_upvalue *new_upvalue(VM *vm, value *slot) {
     return upvalue;
 }
 
+object_class *new_class(VM *vm, object_string *name) {
+    object_class *class_ = ALLOCATE_OBJ(vm, object_class, OBJ_CLASS);
+    class_->name = name;
+    init_hashmap(&class_->methods);
+    return class_;
+}
+
+object_instance *new_instance(VM *vm, object_class *class_) {
+    object_instance *instance = ALLOCATE_OBJ(vm, object_instance, OBJ_INSTANCE);
+    instance->class_ = class_;
+    init_hashmap(&instance->fields);
+    return instance;
+}
+
+object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *method) {
+    object_bound_method *bound = ALLOCATE_OBJ(vm, object_bound_method, OBJ_BOUND_METHOD);
+    bound->receiver = receiver;
+    bound->method = method;
+    return bound;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -187,6 +208,15 @@ void print_object(value v) {
             break;
         case OBJ_CLOSURE:
             print_function(AS_CLOSURE(v)->function);
+            break;
+        case OBJ_CLASS:
+            printf("<class %s>", AS_CLASS(v)->name->chars);
+            break;
+        case OBJ_INSTANCE:
+            printf("<%s instance at %p>", AS_INSTANCE(v)->class_->name->chars, (void*) AS_OBJ(v));
+            break;
+        case OBJ_BOUND_METHOD:
+            print_function(AS_BOUND_METHOD(v)->method->function);
             break;
         default:
             break;

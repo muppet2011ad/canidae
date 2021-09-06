@@ -1,0 +1,7 @@
+{
+    function evil() {
+        super.evilstuff();
+    }
+
+    evil();
+}

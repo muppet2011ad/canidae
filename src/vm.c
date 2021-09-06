@@ -65,6 +65,8 @@ void init_VM(VM *vm) {
     init_hashmap(&vm->globals);
     reset_stack(vm);
     define_stdlib(vm);
+    vm->init_string = NULL;
+    vm->init_string = copy_string(vm, "__init__", 8);
 }
 
 void destroy_VM(VM *vm) {
@@ -73,6 +75,7 @@ void destroy_VM(VM *vm) {
     free_objects(vm, vm->objects);
     free(vm->stack);
     free(vm->grey_stack);
+    vm->init_string = NULL;
 }
 
 void enable_gc(VM *vm) {
@@ -163,11 +166,68 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 push(vm, result);
                 return 1;
             }
+            case OBJ_CLASS: {
+                object_class *class_ = AS_CLASS(callee);
+                vm->stack_ptr[-argc - 1] = OBJ_VAL(new_instance(vm, class_));
+                value initialiser;
+                if(hashmap_get(&class_->methods, vm->init_string, &initialiser)) {
+                    return call(vm, AS_CLOSURE(initialiser), argc);
+                } else if (argc != 0) {
+                    runtime_error(vm, "Expected 0 arguments (got %u).", argc);
+                    return 0;
+                }
+                return 1;
+            }
+            case OBJ_BOUND_METHOD: {
+                object_bound_method *bound = AS_BOUND_METHOD(callee);
+                vm->stack_ptr[-argc - 1] = bound->receiver;
+                return call(vm, bound->method, argc);
+            }
             default: runtime_error(vm, "Can only call functions."); return 0;
         }
     }
     runtime_error(vm, "Can only call functions.");
     return 0;
+}
+
+static uint8_t invoke_from_class(VM *vm, object_class *class_, object_string *name, uint8_t argc) {
+    value method;
+    if (!hashmap_get(&class_->methods, name, &method)) {
+        runtime_error(vm, "Undefined property '%s'.", name->chars);
+        return 0;
+    }
+    return call(vm, AS_CLOSURE(method), argc);
+}
+
+static uint8_t invoke(VM *vm, object_string *name, uint8_t argc) {
+    value receiver = peek(vm, argc);
+
+    if (!IS_INSTANCE(receiver)) {
+        runtime_error(vm, "Only instances have methods.");
+        return 0;
+    }
+
+    object_instance *instance = AS_INSTANCE(receiver);
+
+    value v;
+    if (hashmap_get(&instance->fields, name, &v)) {
+        vm->stack_ptr[-argc - 1] = v;
+        return call_value(vm, v, argc);
+    }
+
+    return invoke_from_class(vm, instance->class_, name, argc);
+}
+
+static uint8_t bind_method(VM *vm, object_class *class_, object_string *name, uint8_t keep_ref) {
+    value method;
+    if (!hashmap_get(&class_->methods, name, &method)) {
+        return 0;
+    }
+
+    object_bound_method *bound = new_bound_method(vm, peek(vm, 0), AS_CLOSURE(method));
+    if (!keep_ref) pop(vm);
+    push(vm, OBJ_VAL(bound));
+    return 1;
 }
 
 static object_upvalue *capture_upvalue(VM *vm, value *local) {
@@ -201,8 +261,15 @@ static void close_upvalues(VM *vm, value *last) {
     }
 }
 
+static void define_method(VM *vm, object_string *name) {
+    value method = peek(vm, 0);
+    object_class *class_ = AS_CLASS(peek(vm, 1));
+    hashmap_set(&class_->methods, vm, name, method);
+    pop(vm);
+}
+
 uint8_t is_falsey(value v) {
-    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0);
+    return IS_NULL(v) || (IS_BOOL(v) && !AS_BOOL(v)) || (IS_NUMBER(v) && AS_NUMBER(v) == 0) || (IS_STRING(v) && AS_STRING(v)->length == 0) || (IS_ARRAY(v) && AS_ARRAY(v)->arr.len == 0) || IS_UNDEFINED(v);
 }
 
 static uint8_t concatenate(VM *vm) {
@@ -327,6 +394,12 @@ static interpret_result run(VM *vm) {
             push(vm, type(a op b)); \
         } while (0)
 
+    #define READ_VARIABLE_ARG() \
+        (vm->long_instruction ? ({vm->long_instruction = 0; READ_UINT24();}) : READ_BYTE())
+
+    #define READ_VARIABLE_CONST() \
+        (vm->long_instruction ? ({vm->long_instruction = 0; READ_CONSTANT_LONG();}) : READ_CONSTANT())
+
     #define BINARY_COMPARISON(t, op) \
         do { \
             value b = peek(vm, 0); \
@@ -417,6 +490,7 @@ static interpret_result run(VM *vm) {
                 double a = AS_NUMBER(pop(vm));
                 push(vm, NUMBER_VAL(pow(a, b)));
                 break;
+            case OP_UNDEFINED: push(vm, UNDEFINED_VAL); break;
             case OP_NULL: push(vm, NULL_VAL); break;
             case OP_TRUE: push(vm, BOOL_VAL(1)); break;
             case OP_FALSE: push(vm, BOOL_VAL(0)); break;
@@ -500,16 +574,19 @@ static interpret_result run(VM *vm) {
                 vm->long_instruction = 1;
                 break;
             }
+            case OP_INHERIT: {
+                value superclass = peek(vm, 1);
+                object_class *subclass = AS_CLASS(peek(vm, 0));
+                if (!IS_CLASS(superclass)) {
+                    runtime_error(vm, "Can only inherit from class.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                hashmap_copy_all(vm, &AS_CLASS(superclass)->methods, &subclass->methods);
+                pop(vm); // Pops subclass
+                break;
+            }
             case OP_CONSTANT: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                push(vm, constant);
+                push(vm, READ_VARIABLE_CONST());
                 break;
             }
             case OP_POPN: {
@@ -526,29 +603,13 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_DEFINE_GLOBAL: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                object_string *name = READ_STRING(constant);
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 hashmap_set(&vm->globals, vm, name, peek(vm, 0));
                 pop(vm);
                 break;
             }
             case OP_GET_GLOBAL: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                object_string *name = READ_STRING(constant);
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 value val;
                 if (!hashmap_get(&vm->globals, name, &val)) {
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
@@ -558,15 +619,7 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_SET_GLOBAL: {
-                value constant;
-                if (vm->long_instruction) {
-                    constant = READ_CONSTANT_LONG();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    constant = READ_CONSTANT();
-                }
-                object_string *name = READ_STRING(constant);
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 if(hashmap_set(&vm->globals, vm, name, peek(vm, 0))) {
                     hashmap_delete(&vm->globals, name);
                     runtime_error(vm, "Undefined variable '%s'.", name->chars);
@@ -575,51 +628,19 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_GET_LOCAL: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                push(vm, frame->slots[arg]);
+                push(vm, frame->slots[READ_VARIABLE_ARG()]);
                 break;
             }
             case OP_SET_LOCAL: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                frame->slots[arg] = peek(vm, 0);
+                frame->slots[READ_VARIABLE_ARG()] = peek(vm, 0);
                 break;
             }
             case OP_GET_UPVALUE: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                push(vm, *frame->closure->upvalues[arg]->location);
+                push(vm, *frame->closure->upvalues[READ_VARIABLE_ARG()]->location);
                 break;
             }
             case OP_SET_UPVALUE: {
-                uint32_t arg;
-                if (vm->long_instruction) {
-                    arg = READ_UINT24();
-                    vm->long_instruction = 0;
-                }
-                else {
-                    arg = READ_BYTE();
-                }
-                *frame->closure->upvalues[arg]->location = peek(vm, 0);
+                *frame->closure->upvalues[READ_VARIABLE_ARG()]->location = peek(vm, 0);
                 break;
             }
             case OP_JUMP_IF_FALSE: {
@@ -658,6 +679,93 @@ static interpret_result run(VM *vm) {
                 }
                 break;
             }
+            case OP_CLASS: {
+                push(vm, OBJ_VAL(new_class(vm, READ_STRING(READ_VARIABLE_CONST()))));
+                break;
+            }
+            case OP_GET_PROPERTY: {
+                if (!IS_INSTANCE(peek(vm, 0))) {
+                    runtime_error(vm, "Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                object_instance *instance = AS_INSTANCE(peek(vm, 0));
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+
+                value v;
+                if (hashmap_get(&instance->fields, name, &v)) {
+                    pop(vm);
+                    push(vm, v);
+                    break;
+                }
+
+                if (!bind_method(vm, instance->class_, name, 0)){
+                    push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                    break;
+                }
+                break;
+            }
+            case OP_GET_PROPERTY_KEEP_REF: {
+                if (!IS_INSTANCE(peek(vm, 0))) {
+                    runtime_error(vm, "Only instances have properties.");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                object_instance *instance = AS_INSTANCE(peek(vm, 0));
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+
+                value v;
+                if (hashmap_get(&instance->fields, name, &v)) {
+                    push(vm, v);
+                    break;
+                }
+                if (!bind_method(vm, instance->class_, name, 1)){
+                    push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                    break;
+                }
+                break;
+            }
+            case OP_SET_PROPERTY: {
+                if (!IS_INSTANCE(peek(vm, 1))) {
+                    runtime_error(vm, "Only instances have fields");
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                object_instance *instance = AS_INSTANCE(peek(vm, 1));
+                hashmap_set(&instance->fields, vm, READ_STRING(READ_VARIABLE_CONST()), peek(vm, 0));
+                value v = pop(vm);
+                pop(vm);
+                push(vm, v);
+                break;
+            }
+            case OP_METHOD: {
+                define_method(vm, READ_STRING(READ_VARIABLE_CONST()));
+                break;
+            }
+            case OP_INVOKE: {
+                object_string *method = READ_STRING(READ_VARIABLE_CONST());
+                uint8_t argc = READ_BYTE();
+                if (!invoke(vm, method, argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
+            case OP_GET_SUPER: {
+                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                object_class *superclass = AS_CLASS(pop(vm));
+                if (!bind_method(vm, superclass, name, 0)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_INVOKE_SUPER: {
+                object_string *method = READ_STRING(READ_VARIABLE_CONST());
+                uint8_t argc = READ_BYTE();
+                object_class *superclass = AS_CLASS(pop(vm));
+                if (!invoke_from_class(vm, superclass, method, argc)) {
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+                frame = &vm->frames[vm->frame_count-1];
+                break;
+            }
         }
     }
 
@@ -670,6 +778,8 @@ static interpret_result run(VM *vm) {
     #undef READ_STRING
     #undef BINARY_COMPARISON
     #undef BINARY_OP
+    #undef READ_VARIABLE_ARG
+    #undef READ_VARIABLE_CONST
 }
 
 interpret_result interpret(VM *vm, const char *source) {

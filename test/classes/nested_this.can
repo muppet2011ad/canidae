@@ -1,0 +1,18 @@
+class WeirdButValidPoint {
+    function __init__(x, y) {
+        function make_point() {
+            this.x = x;
+            this.y = y;
+        }
+        make_point();
+    }
+
+    function printme() {
+        println("(", this.x, ", ", this.y, ")");
+    }
+}
+
+let p = WeirdButValidPoint(1, 2);
+let p2 = WeirdButValidPoint(3, 4);
+p.printme();
+p2.printme();

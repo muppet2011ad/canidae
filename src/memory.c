@@ -4,6 +4,7 @@
 #include "value.h"
 #include "object.h"
 #include "debug.h"
+#include "hashmap.h"
 
 #define GC_HEAP_GROW_FACTOR 2
 
@@ -93,6 +94,22 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_upvalue, obj);
             break;
         }
+        case OBJ_CLASS: {
+            object_class *class_ = (object_class*) obj;
+            destroy_hashmap(&class_->methods, vm);
+            FREE(vm, object_class, obj);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            object_instance *instance = (object_instance*) obj;
+            destroy_hashmap(&instance->fields, vm);
+            FREE(vm, object_instance, obj);
+            break;
+        }
+        case OBJ_BOUND_METHOD: {
+            FREE(vm, object_bound_method, obj);
+            break;
+        }
     }
 }
 
@@ -109,6 +126,8 @@ static void mark_roots(VM *vm) {
     for (object_upvalue *upval = vm->open_upvalues; upval != NULL; upval = upval->next) { // Mark upvalues
         mark_object(vm, (object*)upval);
     }
+
+    mark_object(vm, (object*)vm->init_string);
 }
 
 static void mark_array(VM *vm, value_array *arr) {
@@ -144,6 +163,24 @@ static void blacken_object(VM *vm, object *obj) {
         case OBJ_ARRAY: {
             object_array *array = (object_array*) obj;
             mark_array(vm, &array->arr);
+        }
+        case OBJ_CLASS: {
+            object_class *class_ = (object_class*) obj;
+            mark_object(vm, (object*) class_->name);
+            mark_hashmap(vm, &class_->methods);
+            break;
+        }
+        case OBJ_INSTANCE: {
+            object_instance *instance = (object_instance*) obj;
+            mark_object(vm, (object*)instance->class_);
+            mark_hashmap(vm, &instance->fields);
+            break;
+        }
+        case OBJ_BOUND_METHOD: {
+            object_bound_method *bound = (object_bound_method*) obj;
+            mark_value(vm, bound->receiver);
+            mark_object(vm, (object*) bound->method);
+            break;
         }
         case OBJ_NATIVE:
         case OBJ_STRING:
