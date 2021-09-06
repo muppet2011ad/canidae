@@ -25,6 +25,7 @@ typedef struct object_native object_native;
 typedef struct object_class object_class;
 typedef struct object_instance object_instance;
 typedef struct object_bound_method object_bound_method;
+typedef struct object_namespace object_namespace;
 
 typedef struct {
     value_type type;

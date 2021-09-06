@@ -66,6 +66,7 @@ typedef enum {
     OP_INVOKE, // Variable length with an extra byte for the number of arguments
     OP_GET_SUPER,
     OP_INVOKE_SUPER, // Variable length with an extra byte for the number of arguments
+    OP_IMPORT,
 } opcode;
 
 typedef struct {

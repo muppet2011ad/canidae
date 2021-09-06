@@ -77,6 +77,14 @@ object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *me
     return bound;
 }
 
+object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source) {
+    object_namespace *namespace = ALLOCATE_OBJ(vm, object_namespace, OBJ_NAMESPACE);
+    namespace->name = name;
+    init_hashmap(&namespace->values);
+    hashmap_copy_all(vm, source, &namespace->values);
+    return namespace;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -218,6 +226,8 @@ void print_object(value v) {
         case OBJ_BOUND_METHOD:
             print_function(AS_BOUND_METHOD(v)->method->function);
             break;
+        case OBJ_NAMESPACE:
+            printf("<namespace %s>", AS_NAMESPACE(v)->name->chars);
         default:
             break;
     }

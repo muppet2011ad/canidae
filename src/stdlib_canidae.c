@@ -93,6 +93,13 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                 case OBJ_BOUND_METHOD: {
                     FN_TO_STRING(AS_BOUND_METHOD(args[0])->method->function);
                 }
+                case OBJ_NAMESPACE: {
+                    object_namespace *namespace = AS_NAMESPACE(args[0]);
+                    long len = snprintf(NULL, 0, "<namespace %s>", namespace->name->chars);
+                    char *result = ALLOCATE(vm, char, len + 1);
+                    snprintf(result, len + 1, "<namespace %s>", namespace->name->chars);
+                    return OBJ_VAL(take_string(vm, result, len));
+                }
                 default:
                     runtime_error(vm, "Unprintable object type (how did you even access this?)");
                     return NATIVE_ERROR_VAL;

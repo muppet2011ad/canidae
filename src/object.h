@@ -15,7 +15,8 @@
 #define IS_CLOSURE(v) is_obj_type(v, OBJ_CLOSURE)
 #define IS_CLASS(v) is_obj_type(v, OBJ_CLASS)
 #define IS_INSTANCE(v) is_obj_type(v, OBJ_INSTANCE)
-#define IS_BOUND_METHOD(v) is_obj_type(v, OBJ_BOUND_METHOD);
+#define IS_BOUND_METHOD(v) is_obj_type(v, OBJ_BOUND_METHOD)
+#define IS_NAMESPACE(v) is_obj_type(v, OBJ_NAMESPACE)
 
 #define AS_ARRAY(v) ((object_array*)AS_OBJ(v))
 #define AS_STRING(v) ((object_string*)AS_OBJ(v))
@@ -26,6 +27,7 @@
 #define AS_CLASS(v) ((object_class*)AS_OBJ(v))
 #define AS_INSTANCE(v) ((object_instance*) AS_OBJ(v))
 #define AS_BOUND_METHOD(v) ((object_bound_method*) AS_OBJ(v))
+#define AS_NAMESPACE(v) ((object_namespace*) AS_OBJ(v))
 
 typedef enum {
     OBJ_STRING,
@@ -37,6 +39,7 @@ typedef enum {
     OBJ_CLASS,
     OBJ_INSTANCE,
     OBJ_BOUND_METHOD,
+    OBJ_NAMESPACE,
 } object_type;
 
 typedef value (*native_function)(VM *vm, uint8_t argc, value *argv);
@@ -104,6 +107,12 @@ struct object_bound_method {
     object_closure *method;
 };
 
+struct object_namespace {
+    object obj;
+    object_string *name;
+    hashmap values;
+};
+
 object_native *new_native(VM *vm, native_function function);
 object_function *new_function(VM *vm);
 object_closure *new_closure(VM *vm, object_function *function);
@@ -111,6 +120,7 @@ object_upvalue *new_upvalue(VM *vm, value *slot);
 object_class *new_class(VM *vm, object_string *name);
 object_instance *new_instance(VM *vm, object_class *class_);
 object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *method);
+object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source);
 object_string *take_string(VM *vm, char *chars, size_t length);
 object_string *copy_string(VM *vm, const char *chars, size_t length);
 object_array *allocate_array(VM *vm, value *values, size_t length);

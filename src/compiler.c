@@ -408,7 +408,7 @@ static void call(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 }
 
 static void dot(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
-    consume(p, TOKEN_IDENTIFIER, "Expect property name after '.'.");
+    consume(p, TOKEN_IDENTIFIER, "Expect identifier after '.'.");
     uint32_t property_name = identifier_constant(p, c, vm, &p->prev);
 
     uint8_t assigned = 0;
@@ -918,6 +918,18 @@ static void for_statement(parser *p, compiler *c, VM *vm) {
     end_scope(p, c);
 }
 
+static void import_statement(parser *p, compiler *c, VM *vm) {
+    expression(p, c, vm); // Compiles expression following statement (should be a string representing a filename)
+    if (!match(p, TOKEN_AS)) {
+        error(p, "Expect 'as' after 'import'.");
+    }
+    consume(p, TOKEN_IDENTIFIER, "Expect identifier for imported module after 'as'.");
+    uint32_t namespace_name = identifier_constant(p, c, vm, &p->prev);
+    declare_variable(p, c);
+    mark_initialised(c);
+    emit_variable_length_instruction(p, c, OP_IMPORT, namespace_name);
+    consume(p, TOKEN_SEMICOLON, "Expect ';' after import statement.");
+}
 
 static void print_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm);
@@ -1011,6 +1023,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
     else if (match(p, TOKEN_BREAK)) {
         break_statement(p, c, vm);
     }
+    else if (match(p, TOKEN_IMPORT)) {
+        import_statement(p, c, vm);
+    }
     else {
         expression_statement(p, c, vm);
     }
@@ -1055,6 +1070,7 @@ parse_rule rules[] = {
     [TOKEN_RETURN] = {NULL, NULL, PREC_NONE},
     [TOKEN_SUPER] = {super_, NULL, PREC_NONE},
     [TOKEN_THIS] = {this_, NULL, PREC_NONE},
+    [TOKEN_IMPORT] = {NULL, NULL, PREC_NONE},
     [TOKEN_TRUE] = {literal, NULL, PREC_NONE},
     [TOKEN_LET] = {NULL, NULL, PREC_NONE},
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},

@@ -57,9 +57,9 @@ void mark_value(VM *vm, value val) {
 
 static void free_object(VM *vm, object *obj) {
     #ifdef DEBUG_LOG_GC
-        printf("%p free type %d (", (void*) obj, obj->type);
-        print_value(OBJ_VAL(obj));
-        printf(")\n");
+        printf("%p free type %d", (void*) obj, obj->type);
+        //print_value(OBJ_VAL(obj));
+        printf("\n");
     #endif
     switch (obj->type) {
         case OBJ_STRING: {
@@ -108,6 +108,12 @@ static void free_object(VM *vm, object *obj) {
         }
         case OBJ_BOUND_METHOD: {
             FREE(vm, object_bound_method, obj);
+            break;
+        }
+        case OBJ_NAMESPACE: {
+            object_namespace *namespace = (object_namespace*) obj;
+            destroy_hashmap(&namespace->values, vm);
+            FREE(vm, object_namespace, obj);
             break;
         }
     }
@@ -180,6 +186,12 @@ static void blacken_object(VM *vm, object *obj) {
             object_bound_method *bound = (object_bound_method*) obj;
             mark_value(vm, bound->receiver);
             mark_object(vm, (object*) bound->method);
+            break;
+        }
+        case OBJ_NAMESPACE: {
+            object_namespace *namespace = (object_namespace*) obj;
+            mark_object(vm, (object*) namespace->name);
+            mark_hashmap(vm, &namespace->values);
             break;
         }
         case OBJ_NATIVE:

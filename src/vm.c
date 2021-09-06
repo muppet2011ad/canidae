@@ -78,6 +78,29 @@ void destroy_VM(VM *vm) {
     vm->init_string = NULL;
 }
 
+void merge_VM_heaps(VM *primary, VM *secondary) {
+    // Used in importing - ownership of objects in the secondary VM is transferred to the primary VM, making it responsible for memory management of those objects.
+    // Allows an import statement to move objects over to the main VM before getting rid of the VM used to process the import.
+    // Assumes the secondary VM is using the same strings table as the primary (necessary for string interning to work) and therefore doesn't need to be freed
+    object *insert_point = primary->objects;
+    object *next = primary->objects->next;
+    while (next != NULL) {
+        insert_point = next;
+        next = next->next; // Get to end of objects list for primary VM
+    }
+    insert_point->next = secondary->objects;
+    secondary->objects = NULL;
+    // Now we need to calculate the memory usage of these objects
+    size_t secondary_memory_usage = secondary->bytes_allocated - (secondary->stack_capacity * sizeof(value)) - (secondary->globals.capacity * sizeof(kv_pair)) - (secondary->strings.capacity * sizeof(kv_pair));
+    primary->bytes_allocated += secondary_memory_usage;
+
+    // Now free everything in the secondary VM
+    free(secondary->stack);
+    free(secondary->grey_stack);
+    destroy_hashmap(&secondary->globals, secondary);
+    secondary->init_string = NULL;
+}
+
 void enable_gc(VM *vm) {
     vm->gc_allowed = 1;
 }
@@ -126,6 +149,60 @@ value pop(VM *vm) {
 value popn(VM *vm, size_t n) {
     vm->stack_ptr += -n;
     return *vm->stack_ptr;
+}
+
+static char *read_import_file(VM *vm, const char *path) {
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        runtime_error(vm, "Could not open file '%s'.", path);
+        return NULL;
+    }
+    fseek(f, 0L, SEEK_END);
+    size_t file_size = ftell(f);
+    rewind(f);
+
+    char *buffer = malloc(file_size+1);
+    if (buffer == NULL) {
+        fprintf(stderr, "Out of memory.\n");
+        exit(74);
+    }
+    size_t bytes_read_actual = fread(buffer, sizeof(char), file_size, f);
+    if (bytes_read_actual < file_size) {
+        runtime_error(vm, "Error reading source file on import of '%s'.", path);
+        return NULL;
+    }
+    buffer[bytes_read_actual] = '\0';
+    fclose(f);
+    return buffer;
+}
+
+static interpret_result import(VM *vm, object_string *filename, object_string *namespace_name) {
+    char *source = read_import_file(vm, AS_CSTRING(OBJ_VAL(filename)));
+    if (source == NULL) return INTERPRET_RUNTIME_ERROR;
+    VM *temp_vm = malloc(sizeof(VM));
+    init_VM(temp_vm); // Create a VM to interpret our imported code
+    destroy_hashmap(&temp_vm->strings, temp_vm);
+    temp_vm->strings = vm->strings;
+
+    interpret_result status = interpret(temp_vm, source); // Run the imported module in this VM
+    free(source);
+    switch (status) {
+        case INTERPRET_COMPILE_ERROR:
+            fprintf(stderr, "Failed to compile module '%s'.", AS_CSTRING(OBJ_VAL(filename)));
+            break;
+        case INTERPRET_RUNTIME_ERROR:
+            fprintf(stderr, "Error in module '%s'.", AS_CSTRING(OBJ_VAL(filename)));
+            break;
+        case INTERPRET_OK: {
+            object_namespace *namespace = new_namespace(vm, namespace_name, &temp_vm->globals);
+            push(vm, OBJ_VAL(namespace));
+            merge_VM_heaps(vm, temp_vm);
+            vm->strings = temp_vm->strings;
+            break;
+        }
+    }
+    free(temp_vm);
+    return status;
 }
 
 static value peek(VM *vm, int distance) {
@@ -202,8 +279,21 @@ static uint8_t invoke_from_class(VM *vm, object_class *class_, object_string *na
 static uint8_t invoke(VM *vm, object_string *name, uint8_t argc) {
     value receiver = peek(vm, argc);
 
+    if (IS_NAMESPACE(receiver)) {
+        object_namespace *namespace = AS_NAMESPACE(receiver);
+        value v;
+        if (hashmap_get(&namespace->values, name, &v)) {
+            vm->stack_ptr[-argc - 1] = v;
+            return call_value(vm, v, argc);
+        }
+        else {
+            runtime_error(vm, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
+            return 0;
+        }
+    }
+
     if (!IS_INSTANCE(receiver)) {
-        runtime_error(vm, "Only instances have methods.");
+        runtime_error(vm, "Only instances and namespaces have methods or functions.");
         return 0;
     }
 
@@ -585,6 +675,15 @@ static interpret_result run(VM *vm) {
                 pop(vm); // Pops subclass
                 break;
             }
+            case OP_IMPORT: {
+                object_string *namespace_name = READ_STRING(READ_VARIABLE_CONST());
+                object_string *filename = AS_STRING(peek(vm, 0));
+                interpret_result result = import(vm, filename, namespace_name);
+                vm->stack_ptr[-2] = vm->stack_ptr[-1];
+                pop(vm);                
+                if (result != INTERPRET_OK) return INTERPRET_RUNTIME_ERROR;
+                break;
+            }
             case OP_CONSTANT: {
                 push(vm, READ_VARIABLE_CONST());
                 break;
@@ -684,52 +783,89 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_GET_PROPERTY: {
-                if (!IS_INSTANCE(peek(vm, 0))) {
-                    runtime_error(vm, "Only instances have properties.");
+                value obj = peek(vm, 0);
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
+                    runtime_error(vm, "Only instances and namespaces have properties.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                object_instance *instance = AS_INSTANCE(peek(vm, 0));
-                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                if (IS_INSTANCE(obj)) {
+                    object_instance *instance = AS_INSTANCE(peek(vm, 0));
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
 
-                value v;
-                if (hashmap_get(&instance->fields, name, &v)) {
-                    pop(vm);
-                    push(vm, v);
-                    break;
+                    value v;
+                    if (hashmap_get(&instance->fields, name, &v)) {
+                        pop(vm);
+                        push(vm, v);
+                        break;
+                    }
+                    if (!bind_method(vm, instance->class_, name, 1)){
+                        push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                        break;
+                    }
+                }
+                else if (IS_NAMESPACE(obj)) {
+                    object_namespace *namespace = AS_NAMESPACE(obj);
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    value v;
+                    if (hashmap_get(&namespace->values, name, &v)) {
+                        pop(vm);
+                        push(vm, v);
+                        break;
+                    }
+                    else {
+                        runtime_error(vm, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
 
-                if (!bind_method(vm, instance->class_, name, 0)){
-                    push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
-                    break;
-                }
                 break;
             }
             case OP_GET_PROPERTY_KEEP_REF: {
-                if (!IS_INSTANCE(peek(vm, 0))) {
-                    runtime_error(vm, "Only instances have properties.");
+                value obj = peek(vm, 0);
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
+                    runtime_error(vm, "Only instances and namespaces have properties.");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                object_instance *instance = AS_INSTANCE(peek(vm, 0));
-                object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                if (IS_INSTANCE(obj)) {
+                    object_instance *instance = AS_INSTANCE(peek(vm, 0));
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
 
-                value v;
-                if (hashmap_get(&instance->fields, name, &v)) {
-                    push(vm, v);
-                    break;
+                    value v;
+                    if (hashmap_get(&instance->fields, name, &v)) {
+                        push(vm, v);
+                        break;
+                    }
+                    if (!bind_method(vm, instance->class_, name, 1)){
+                        push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
+                        break;
+                    }
                 }
-                if (!bind_method(vm, instance->class_, name, 1)){
-                    push(vm, UNDEFINED_VAL); // Take JS approach of using undefined for non-existent properties
-                    break;
+                else if (IS_NAMESPACE(obj)) {
+                    object_namespace *namespace = AS_NAMESPACE(obj);
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    value v;
+                    if (hashmap_get(&namespace->values, name, &v)) {
+                        push(vm, v);
+                        break;
+                    }
+                    else {
+                        runtime_error(vm, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
                 }
+
                 break;
             }
             case OP_SET_PROPERTY: {
-                if (!IS_INSTANCE(peek(vm, 1))) {
-                    runtime_error(vm, "Only instances have fields");
+                value obj = peek(vm, 1);
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
+                    runtime_error(vm, "Only instances and namespaces have fields");
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                object_instance *instance = AS_INSTANCE(peek(vm, 1));
-                hashmap_set(&instance->fields, vm, READ_STRING(READ_VARIABLE_CONST()), peek(vm, 0));
+                hashmap *h; // Instance fields or namespace values goes here
+                if (IS_INSTANCE(obj)) h = &AS_INSTANCE(obj)->fields;
+                else if (IS_NAMESPACE(obj)) h = &AS_NAMESPACE(obj)->values;
+                hashmap_set(h, vm, READ_STRING(READ_VARIABLE_CONST()), peek(vm, 0));
                 value v = pop(vm);
                 pop(vm);
                 push(vm, v);
