@@ -1,0 +1,22 @@
+class Point {
+    function __init__(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    function printme() {
+        println("(", this.x, ", ", this.y, ")");
+    }
+
+    function bigger(bigboinumber) {
+        this.x += bigboinumber;
+        this.y += bigboinumber;
+    }
+}
+
+let p = Point(1, 2);
+p.printme();
+p.bigger(5);
+p.printme();
+p.y *= -1;
+p.printme();

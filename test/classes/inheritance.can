@@ -1,0 +1,36 @@
+{
+    class Beverage {
+        function __init__(type) {
+            this.type = type;
+        }
+
+        function printme() {
+            println("I'm a cup of ", this.type, "!");
+        }
+
+        function drink() {
+            this.type = "empty";
+        }
+    }
+    
+    class Tea inherits Beverage {
+        function __init__(tea) {
+            super.__init__("tea");
+            this.tea = tea;
+        }
+
+        function printme() {
+            println("I'm a mug of ", this.type, " (", this.tea, ")");
+        }
+    }
+
+    let b = Beverage("orange juice");
+    b.printme();
+    b.drink();
+    b.printme();
+
+    let t = Tea("earl grey, hot");
+    t.printme();
+    t.drink();
+    t.printme();
+}

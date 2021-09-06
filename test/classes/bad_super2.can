@@ -1,0 +1,9 @@
+{
+    class Point {
+        function __init__(x, y) {
+            super.__init__(x, y);
+            this.x = x;
+            this.y = y;
+        }
+    }
+}

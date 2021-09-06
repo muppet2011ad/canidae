@@ -1,0 +1,12 @@
+class WeirdButValid {
+    function __init__(myfunction) {
+        this.f = myfunction;
+    }
+
+    function f(){ // This should be shadowed by the field f
+        return 0;
+    }
+}
+
+let w = WeirdButValid(println);
+w.f("Hello, World!");
