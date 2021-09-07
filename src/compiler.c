@@ -921,7 +921,7 @@ static void for_statement(parser *p, compiler *c, VM *vm) {
 static void import_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm); // Compiles expression following statement (should be a string representing a filename)
     if (!match(p, TOKEN_AS)) {
-        error(p, "Expect 'as' after 'import'.");
+        error_at_current(p, "Expect 'as' after 'import'.");
     }
     uint32_t namespace_name = parse_variable(p, c, vm, "Expect identifier for imported module after 'as'.");
     uint32_t constant_name = identifier_constant(p, c, vm, &p->prev);
