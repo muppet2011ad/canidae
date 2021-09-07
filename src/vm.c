@@ -48,6 +48,7 @@ void define_native(VM *vm, const char *name, native_function function) {
 }
 
 void init_VM(VM *vm) {
+    vm->source_path = NULL;
     vm->stack = calloc(STACK_INITIAL, sizeof(value));
     if (vm->stack == NULL) {
         fprintf(stderr, "Out of memory.");
@@ -97,6 +98,7 @@ void merge_VM_heaps(VM *primary, VM *secondary) {
     // Now free everything in the secondary VM
     free(secondary->stack);
     free(secondary->grey_stack);
+    free(secondary->source_path);
     destroy_hashmap(&secondary->globals, secondary);
     secondary->init_string = NULL;
 }
@@ -151,8 +153,53 @@ value popn(VM *vm, size_t n) {
     return *vm->stack_ptr;
 }
 
-static char *read_import_file(VM *vm, const char *path) {
+static FILE* resolve_import_path(VM *vm, char *path, char **resolved_path) {
+    // Attempts different locations to open the source file that we're importing from:
+    // 1. Current working directory
+    // 2. Directory containing the script file performing the import
+    // 3. ... if I come up with anything else it will go here
     FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        if (vm->source_path != NULL) {
+            size_t final_index = strlen(vm->source_path);
+            #ifdef __unix__ // Horrible conditional compilation so it plays nice with Windows
+                while (vm->source_path[final_index] != '/' && final_index != 0) final_index--;
+            #endif
+            #ifdef _WIN32
+                while ((vm->source_path[final_index] != '/' || vm->source_path[final_index] != '\\') && final_index != 0) final_index--;
+            #endif
+            #ifdef _WIN64
+                while ((vm->source_path[final_index] != '/' || vm->source_path[final_index] != '\\') && final_index != 0) final_index--;
+            #endif
+            if (final_index != 0) {
+                char *final_path = malloc(final_index+strlen(path)+2); // Allocate memory to store the final path we're attempting
+                memcpy(final_path, vm->source_path, final_index+1);
+                memcpy(&final_path[final_index+1], path, strlen(path)+1); // Copy in the directory of the script followed by the final specified
+                f = fopen(final_path, "rb");
+                if (f != NULL) {
+                    *resolved_path = final_path;
+                    return f;
+                }
+                else {
+                    return NULL;
+                }
+            }
+            else {
+                return NULL;
+            }
+        }
+        else {
+            return NULL;
+        }
+    }
+    else {
+        *resolved_path = path;
+        return f;
+    }
+}
+
+static char *read_import_file(VM *vm, char *path, char **script_path) {
+    FILE *f = resolve_import_path(vm, path, script_path);
     if (f == NULL) {
         runtime_error(vm, "Could not open file '%s'.", path);
         return NULL;
@@ -177,10 +224,12 @@ static char *read_import_file(VM *vm, const char *path) {
 }
 
 static interpret_result import(VM *vm, object_string *filename, object_string *namespace_name) {
-    char *source = read_import_file(vm, AS_CSTRING(OBJ_VAL(filename)));
+    char *final_path = NULL;
+    char *source = read_import_file(vm, AS_CSTRING(OBJ_VAL(filename)), &final_path);
     if (source == NULL) return INTERPRET_RUNTIME_ERROR;
     VM *temp_vm = malloc(sizeof(VM));
     init_VM(temp_vm); // Create a VM to interpret our imported code
+    temp_vm->source_path = final_path;
     destroy_hashmap(&temp_vm->strings, temp_vm);
     temp_vm->strings = vm->strings;
 

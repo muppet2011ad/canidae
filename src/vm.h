@@ -17,6 +17,7 @@ typedef struct {
 } call_frame;
 
 typedef struct VM {
+    char *source_path;
     call_frame frames[FRAMES_MAX];
     uint16_t frame_count;
     value *stack;

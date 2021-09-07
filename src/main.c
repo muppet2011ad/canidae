@@ -59,6 +59,7 @@ int main(int argc, const char *argv[]) {
     if (argc == 1) {
         repl(&vm);
     } else if (argc == 2) {
+        vm.source_path = argv[1];
         run_file(&vm, argv[1]);
     } else {
         fprintf(stderr, "Usage: canidae [file]\n");
