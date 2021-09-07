@@ -1,0 +1,7 @@
+{import "point2d.can" as point2d;
+import "point3d.can" as point3d;
+
+let p1 = point2d.Point2D(1, 2);
+let p2 = point3d.Point3D(3, 4, 5);
+p1.printme();
+p2.printme();}

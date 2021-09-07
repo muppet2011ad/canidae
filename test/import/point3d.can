@@ -1,0 +1,11 @@
+class Point3D {
+    function __init__(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    function printme() {
+        println("(", this.x, ", ", this.y, ", ", this.z, ")");
+    }
+}

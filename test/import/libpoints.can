@@ -1,0 +1,4 @@
+import "point2d.can" as point2d;
+import "point3d.can" as point3d;
+
+let pi = 3.141592653589793238;

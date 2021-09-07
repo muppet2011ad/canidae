@@ -1,0 +1,9 @@
+{
+    import "libpoints.can" as points;
+
+    let p1 = points.point2d.Point2D(1, 2);
+    let p2 = points.point3d.Point3D(3, 4, 5);
+    p1.printme();
+    p2.printme();
+    print points.pi;
+}

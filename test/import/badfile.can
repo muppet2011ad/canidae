@@ -1,0 +1,3 @@
+import "nonexistent.can" as m;
+
+print "Hello, World!";

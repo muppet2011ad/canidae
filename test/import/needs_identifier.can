@@ -1,0 +1,3 @@
+import "point2d.can";
+
+print "Hello World";
