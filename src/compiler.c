@@ -923,11 +923,10 @@ static void import_statement(parser *p, compiler *c, VM *vm) {
     if (!match(p, TOKEN_AS)) {
         error(p, "Expect 'as' after 'import'.");
     }
-    consume(p, TOKEN_IDENTIFIER, "Expect identifier for imported module after 'as'.");
-    uint32_t namespace_name = identifier_constant(p, c, vm, &p->prev);
-    declare_variable(p, c);
-    mark_initialised(c);
-    emit_variable_length_instruction(p, c, OP_IMPORT, namespace_name);
+    uint32_t namespace_name = parse_variable(p, c, vm, "Expect identifier for imported module after 'as'.");
+    uint32_t constant_name = identifier_constant(p, c, vm, &p->prev);
+    emit_variable_length_instruction(p, c, OP_IMPORT, constant_name);
+    define_variable(p, c, namespace_name);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after import statement.");
 }
 
