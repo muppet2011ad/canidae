@@ -62,6 +62,7 @@ void init_VM(VM *vm) {
     vm->gc_threshold = GC_THRESHOLD_INITIAL; // Arbitrary threshold
     vm->stack_capacity = STACK_INITIAL;
     vm->objects = NULL;
+    vm->owns_strings = 1;
     init_hashmap(&vm->strings);
     init_hashmap(&vm->globals);
     reset_stack(vm);
@@ -232,6 +233,7 @@ static interpret_result import(VM *vm, object_string *filename, object_string *n
     temp_vm->source_path = final_path;
     destroy_hashmap(&temp_vm->strings, temp_vm);
     temp_vm->strings = vm->strings;
+    temp_vm->owns_strings = 0;
 
     interpret_result status = interpret(temp_vm, source); // Run the imported module in this VM
     free(source);
@@ -243,10 +245,12 @@ static interpret_result import(VM *vm, object_string *filename, object_string *n
             fprintf(stderr, "Error in module '%s'.", AS_CSTRING(OBJ_VAL(filename)));
             break;
         case INTERPRET_OK: {
+            disable_gc(vm);
             object_namespace *namespace = new_namespace(vm, namespace_name, &temp_vm->globals);
             push(vm, OBJ_VAL(namespace));
             merge_VM_heaps(vm, temp_vm);
             vm->strings = temp_vm->strings;
+            enable_gc(vm);
             break;
         }
     }

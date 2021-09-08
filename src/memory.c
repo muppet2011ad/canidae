@@ -169,6 +169,7 @@ static void blacken_object(VM *vm, object *obj) {
         case OBJ_ARRAY: {
             object_array *array = (object_array*) obj;
             mark_array(vm, &array->arr);
+            break;
         }
         case OBJ_CLASS: {
             object_class *class_ = (object_class*) obj;
@@ -238,7 +239,7 @@ void collect_garbage(VM *vm) {
     // Perform gc on heap values
     mark_roots(vm);
     trace_references(vm);
-    hashmap_remove_white(vm, &vm->strings);
+    if (vm->owns_strings) hashmap_remove_white(vm, &vm->strings);
     sweep(vm);
 
     // Consider shrinking stack if it's particularly oversized
