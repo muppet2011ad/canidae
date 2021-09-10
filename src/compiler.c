@@ -442,6 +442,12 @@ static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     }
 }
 
+static void typeof_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    consume(p, TOKEN_LEFT_PAREN, "Expect '(' after 'typeof'.");
+    expression(p, c, vm);
+    consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after argument.");
+    emit_byte(p, c, OP_TYPEOF);
+}
 
 static void type(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     #define CONVERTABLE_TYPEOF(operand) \
@@ -1107,6 +1113,7 @@ parse_rule rules[] = {
     [TOKEN_ARRAY] = {type, NULL, PREC_NONE},
     [TOKEN_FUNCTION] = {type, NULL, PREC_NONE},
     [TOKEN_NAMESPACE] = {type, NULL, PREC_NONE},
+    [TOKEN_TYPEOF] = {typeof_, NULL, PREC_CALL},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };

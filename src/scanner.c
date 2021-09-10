@@ -206,6 +206,7 @@ static token_type identifier_type(scanner *s) {
                         }
                     }
                     case 'r': return check_keyword(s, 2, 2, "ue", TOKEN_TRUE);
+                    case 'y': return check_keyword(s, 2, 4, "peof", TOKEN_TYPEOF);
                 }
             }
             break;

@@ -728,6 +728,41 @@ static interpret_result run(VM *vm) {
                 pop(vm); // Pops subclass
                 break;
             }
+            case OP_TYPEOF: {
+                value v = peek(vm, 0);
+                switch (v.type) {
+                    case NULL_TYPE: pop(vm); push(vm, NULL_VAL); break;
+                    case NUM_TYPE: pop(vm); push(vm, TYPE_VAL(TYPEOF_NUM)); break;
+                    case BOOL_TYPE: pop(vm); push(vm, TYPE_VAL(TYPEOF_BOOL)); break;
+                    case UNDEFINED_TYPE: pop(vm); push(vm, UNDEFINED_VAL); break;
+                    case OBJ_TYPE: {
+                        switch (GET_OBJ_TYPE(v)) {
+                            case OBJ_STRING: pop(vm); push(vm, TYPE_VAL(TYPEOF_STRING)); break;
+                            case OBJ_ARRAY: pop(vm); push(vm, TYPE_VAL(TYPEOF_ARRAY)); break;
+                            case OBJ_CLASS: pop(vm); push(vm, TYPE_VAL(TYPEOF_CLASS)); break;
+                            case OBJ_FUNCTION:
+                            case OBJ_BOUND_METHOD:
+                            case OBJ_CLOSURE:
+                                pop(vm); push(vm, TYPE_VAL(TYPEOF_FUNCTION)); break;
+                            case OBJ_NAMESPACE: pop(vm); push(vm, TYPE_VAL(TYPEOF_NAMESPACE)); break;
+                            case OBJ_INSTANCE: {
+                                object_instance *instance = AS_INSTANCE(v);
+                                pop(vm);
+                                push(vm, OBJ_VAL(instance->class_));
+                                break;
+                            }
+                            default:
+                                runtime_error(vm, "Unsupported type for 'typeof'.");
+                                return INTERPRET_RUNTIME_ERROR;
+                        }
+                        break;
+                    }
+                    default:
+                        runtime_error(vm, "Unsupported type for 'typeof'.");
+                        return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             case OP_IMPORT: {
                 object_string *namespace_name = READ_STRING(READ_VARIABLE_CONST());
                 object_string *filename = AS_STRING(peek(vm, 0));
