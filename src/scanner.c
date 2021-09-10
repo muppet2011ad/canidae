@@ -110,12 +110,21 @@ static token_type identifier_type(scanner *s) {
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {
                     case 'n': return check_keyword(s, 2, 1, "d", TOKEN_AND);
+                    case 'r': return check_keyword(s, 2, 3, "ray", TOKEN_ARRAY);
                     case 's': return check_keyword(s, 2, 0, "", TOKEN_AS);
                 }
                 break;
             } 
             break;
-        case 'b': return check_keyword(s, 1, 4, "reak", TOKEN_BREAK);
+        case 'b': 
+            if (s->current - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'r': return check_keyword(s, 2, 3, "eak", TOKEN_BREAK);
+                    case 'o': return check_keyword(s, 2, 2, "ol", TOKEN_BOOL);
+                }
+            }
+            break;
+        
         case 'c': 
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {
@@ -159,11 +168,32 @@ static token_type identifier_type(scanner *s) {
             }
             break;
         case 'l': return check_keyword(s, 1, 2, "et", TOKEN_LET);
-        case 'n': return check_keyword(s, 1, 3, "ull", TOKEN_NULL);
+        case 'n': 
+            if (s->current - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'a': return check_keyword(s, 2, 7, "mespace", TOKEN_NAMESPACE);
+                    case 'u':
+                        if (s->current - s->start > 2) {
+                            switch (s->start[2]) {
+                                case 'l': return check_keyword(s, 3, 1, "l", TOKEN_NULL);
+                                case 'm': return check_keyword(s, 3, 0, "", TOKEN_NUM);
+                            }
+                        }
+                        break;
+                }
+            }
+            break;
         case 'o': return check_keyword(s, 1, 1, "r", TOKEN_OR);
         case 'p': return check_keyword(s, 1, 4, "rint", TOKEN_PRINT);
         case 'r': return check_keyword(s, 1, 5, "eturn", TOKEN_RETURN);
-        case 's': return check_keyword(s, 1, 4, "uper", TOKEN_SUPER);
+        case 's': 
+            if (s->current - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'u': return check_keyword(s, 2, 3, "per", TOKEN_SUPER);
+                    case 't': return check_keyword(s, 2, 1, "r", TOKEN_STR);
+                }
+            }
+            break;
         case 't':
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {
@@ -181,7 +211,6 @@ static token_type identifier_type(scanner *s) {
             break;
         case 'u': return check_keyword(s, 1, 8, "ndefined", TOKEN_UNDEFINED);
         case 'w': return check_keyword(s, 1, 4, "hile", TOKEN_WHILE);
-
     }
 
     return TOKEN_IDENTIFIER;

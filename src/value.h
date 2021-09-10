@@ -12,8 +12,19 @@ typedef enum {
     BOOL_TYPE,
     OBJ_TYPE,
     UNDEFINED_TYPE,
+    TYPE_TYPE,
     NATIVE_ERROR_TYPE, // Used only by native functions to signal a runtime error so the VM knows to stop
 } value_type;
+
+typedef enum {
+    TYPEOF_NUM,
+    TYPEOF_BOOL,
+    TYPEOF_STRING,
+    TYPEOF_ARRAY,
+    TYPEOF_CLASS,
+    TYPEOF_FUNCTION,
+    TYPEOF_NAMESPACE,
+} typeofs;
 
 typedef struct object object;
 typedef struct object_string object_string;
@@ -32,6 +43,7 @@ typedef struct {
     union data {
         double number;
         uint8_t boolean;
+        typeofs type;
         object *obj;
     } as;
 
@@ -47,6 +59,7 @@ typedef struct {
 #define BOOL_VAL(n) ((value) {BOOL_TYPE, {.boolean = n}})
 #define NULL_VAL ((value) {NULL_TYPE, {.number = 0}})
 #define UNDEFINED_VAL ((value) {UNDEFINED_TYPE, {.number = 0}})
+#define TYPE_VAL(t) ((value) {TYPE_TYPE, {.type = t}})
 #define OBJ_VAL(o) ((value) {OBJ_TYPE, {.obj = (object*)o}})
 #define NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.number = 0}})
 
@@ -59,6 +72,7 @@ typedef struct {
 #define IS_NULL(v) ((v).type == NULL_TYPE)
 #define IS_OBJ(v) ((v).type == OBJ_TYPE)
 #define IS_UNDEFINED(v) ((v).type == UNDEFINED_TYPE)
+#define IS_TYPE_TYPE(v) ((v).type == TYPE_TYPE)
 #define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE)
 
 void init_value_array(value_array *arr);

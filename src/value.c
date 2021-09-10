@@ -27,6 +27,7 @@ void destroy_value_array(VM *vm, value_array *arr) {
 
 void print_value(value val) {
     char bool_strings[2][6]= {"false", "true"};
+    char type_strings[7][10] = {"num", "bool", "str", "array", "class", "function", "namespace"};
     switch (val.type) {
         case NUM_TYPE:
             printf("%g", AS_NUMBER(val));
@@ -39,6 +40,9 @@ void print_value(value val) {
             printf("null"); break;
         case UNDEFINED_TYPE:
             printf("undefined"); break;
+        case TYPE_TYPE: {
+            printf("<type %s>", type_strings[val.as.type]); break;
+        }
         case OBJ_TYPE: print_object(val); break;
     }
 }

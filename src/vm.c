@@ -754,6 +754,16 @@ static interpret_result run(VM *vm) {
                 frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
+            case OP_PUSH_TYPEOF: {
+                uint8_t arg = READ_BYTE();
+                push(vm, TYPE_VAL(arg));
+                break;
+            }
+            case OP_CONV_TYPE: {
+                uint8_t arg = READ_BYTE();
+                // TODO
+                break;
+            }
             case OP_DEFINE_GLOBAL: {
                 object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 hashmap_set(&vm->globals, vm, name, peek(vm, 0));

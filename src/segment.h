@@ -41,6 +41,8 @@ typedef enum {
     // One-byte operand
     OP_POPN,
     OP_CALL,
+    OP_PUSH_TYPEOF,
+    OP_CONV_TYPE,
     // Three-byte operand 
     // Five-byte operand
     OP_JUMP_IF_FALSE,

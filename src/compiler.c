@@ -442,6 +442,32 @@ static void literal(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     }
 }
 
+
+static void type(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    #define CONVERTABLE_TYPEOF(operand) \
+        if (match(p, TOKEN_LEFT_PAREN)) { \
+            expression(p, c, vm); \
+            consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after argument."); \
+            emit_2_bytes(p, c, OP_CONV_TYPE, operand); \
+        } \
+        else { \
+            emit_2_bytes(p, c, OP_PUSH_TYPEOF, operand); \
+        }
+    switch (p->prev.type) {
+        case TOKEN_STR: CONVERTABLE_TYPEOF(TYPEOF_STRING); break;
+        case TOKEN_NUM: CONVERTABLE_TYPEOF(TYPEOF_NUM); break;
+        case TOKEN_BOOL: CONVERTABLE_TYPEOF(TYPEOF_BOOL); break;
+        case TOKEN_ARRAY: emit_2_bytes(p, c, OP_PUSH_TYPEOF, TYPEOF_ARRAY); break;
+        case TOKEN_CLASS: emit_2_bytes(p, c, OP_PUSH_TYPEOF, TYPEOF_CLASS); break;
+        case TOKEN_FUNCTION: emit_2_bytes(p, c, OP_PUSH_TYPEOF, TYPEOF_FUNCTION); break;
+        case TOKEN_NAMESPACE: emit_2_bytes(p, c, OP_PUSH_TYPEOF, TYPEOF_NAMESPACE); break;
+        default: 
+            error_at_current(p, "Attempt to compile type expression without type."); // Should be unreachable.
+            break;
+    }
+    #undef CONVERTABLE_TYPEOF
+}
+
 static void number(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     double num = strtod(p->prev.start, NULL);
     emit_constant(p, c, NUMBER_VAL(num));
@@ -1057,7 +1083,7 @@ parse_rule rules[] = {
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, and_, PREC_AND},
-    [TOKEN_CLASS] = {NULL, NULL, PREC_NONE},
+    [TOKEN_CLASS] = {type, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},
     [TOKEN_FOR] = {NULL, NULL, PREC_NONE},
@@ -1075,6 +1101,12 @@ parse_rule rules[] = {
     [TOKEN_CONST] = {NULL, NULL, PREC_NONE},
     [TOKEN_WHILE] = {NULL, NULL, PREC_NONE},
     [TOKEN_UNDEFINED] = {literal, NULL, PREC_NONE},
+    [TOKEN_STR] = {type, NULL, PREC_CALL},
+    [TOKEN_NUM] = {type, NULL, PREC_CALL},
+    [TOKEN_BOOL] = {type, NULL, PREC_CALL},
+    [TOKEN_ARRAY] = {type, NULL, PREC_NONE},
+    [TOKEN_FUNCTION] = {type, NULL, PREC_NONE},
+    [TOKEN_NAMESPACE] = {type, NULL, PREC_NONE},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
