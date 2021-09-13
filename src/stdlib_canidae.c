@@ -9,25 +9,6 @@
 #include <math.h>
 #include "stdlib_canidae.h"
 
-static value len_native(VM *vm, uint8_t argc, value *args) { // Gets length of array or string, should be given name "len"
-    if (argc != 1) {
-        runtime_error(vm, "Function 'len' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    if (args[0].type != OBJ_TYPE) {
-        runtime_error(vm, "Invalid type to get length.");
-        return NATIVE_ERROR_VAL;
-    }
-    switch(GET_OBJ_TYPE(args[0])) {
-        case OBJ_ARRAY: return NUMBER_VAL(AS_ARRAY(args[0])->arr.len);
-        case OBJ_STRING: return NUMBER_VAL(AS_STRING(args[0])->length);
-        default: {
-            runtime_error(vm, "Invalid type to get length.");
-            return NATIVE_ERROR_VAL;
-        }
-    }
-}
-
 static value read_line(VM *vm, FILE *f) { // Helper function to read a line as an obj_string, not intended to be a directly accessible part of the lib
     size_t capacity = 0;
     size_t len = 0;
@@ -71,6 +52,5 @@ static value clock_native(VM *vm, uint8_t argc, value *args) {
 
 void define_stdlib(VM *vm) {
     define_native(vm, "clock", clock_native);
-    define_native(vm, "len", len_native);
     define_native(vm, "input", input);
 }

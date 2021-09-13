@@ -77,6 +77,7 @@ void init_VM(VM *vm) {
     vm->mult_string = NULL;
     vm->div_string = NULL;
     vm->pow_string = NULL;
+    vm->len_string = NULL;
     vm->init_string = copy_string(vm, "__init__", 8);
     vm->str_string = copy_string(vm, "__str__", 7);
     vm->num_string = copy_string(vm, "__num__", 7);
@@ -86,6 +87,7 @@ void init_VM(VM *vm) {
     vm->mult_string = copy_string(vm, "__mul__", 7);
     vm->div_string = copy_string(vm, "__div__", 7);
     vm->pow_string = copy_string(vm, "__pow__", 7);
+    vm->len_string = copy_string(vm, "__len__", 7);
 }
 
 void destroy_VM(VM *vm) {
@@ -823,6 +825,42 @@ static interpret_result run(VM *vm) {
                     default:
                         runtime_error(vm, "Unsupported type for 'typeof'.");
                         return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
+            case OP_LEN: {
+                value v = peek(vm, 0);
+                uint8_t result = 0;
+                if (v.type == OBJ_TYPE) {
+                    switch (GET_OBJ_TYPE(v)) {
+                        case OBJ_STRING: {
+                            size_t len = AS_STRING(v)->length;
+                            pop(vm);
+                            push(vm, NUMBER_VAL((double) len));
+                            result = 1;
+                            break;
+                        }
+                        case OBJ_ARRAY: {
+                            size_t len = AS_ARRAY(v)->arr.len;
+                            pop(vm);
+                            push(vm, NUMBER_VAL((double) len));
+                            result = 1;
+                            break;
+                        }
+                        case OBJ_INSTANCE: {
+                            object_instance *instance = AS_INSTANCE(v);
+                            value v;
+                            if (hashmap_get(&instance->class_->methods, vm->len_string, &v)) {
+                                result = call(vm, AS_CLOSURE(v), 0);
+                                frame = &vm->frames[vm->frame_count-1];
+                            }
+                        }
+                        default: break;
+                    }
+                }
+                if (!result) {
+                    runtime_error(vm, "Unsupported type for 'len' operator.");
+                    return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
             }

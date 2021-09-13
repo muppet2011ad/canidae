@@ -474,6 +474,13 @@ static void type(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     #undef CONVERTABLE_TYPEOF
 }
 
+static void len_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    consume(p, TOKEN_LEFT_PAREN, "Expect '(' after 'len'.");
+    expression(p, c, vm);
+    consume(p, TOKEN_RIGHT_PAREN, "Expect ')' after argument.");
+    emit_byte(p, c, OP_LEN);
+}
+
 static void number(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     double num = strtod(p->prev.start, NULL);
     emit_constant(p, c, NUMBER_VAL(num));
@@ -1115,6 +1122,7 @@ parse_rule rules[] = {
     [TOKEN_FUNCTION] = {type, NULL, PREC_NONE},
     [TOKEN_NAMESPACE] = {type, NULL, PREC_NONE},
     [TOKEN_TYPEOF] = {typeof_, NULL, PREC_CALL},
+    [TOKEN_LEN] = {len_, NULL, PREC_CALL},
     [TOKEN_ERROR] = {NULL, NULL, PREC_NONE},
     [TOKEN_EOF] = {NULL, NULL, PREC_NONE},
 };
