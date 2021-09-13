@@ -134,6 +134,14 @@ static void mark_roots(VM *vm) {
     }
 
     mark_object(vm, (object*)vm->init_string);
+    mark_object(vm, (object*)vm->str_string);
+    mark_object(vm, (object*)vm->num_string);
+    mark_object(vm, (object*)vm->bool_string);
+    mark_object(vm, (object*)vm->add_string);
+    mark_object(vm, (object*)vm->sub_string);
+    mark_object(vm, (object*)vm->mult_string);
+    mark_object(vm, (object*)vm->div_string);
+    mark_object(vm, (object*)vm->pow_string);
 }
 
 static void mark_array(VM *vm, value_array *arr) {
