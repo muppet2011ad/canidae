@@ -81,3 +81,15 @@ def test_bad_super2():
     assert len(lines) == 2
     assert lines[0].startswith("[line 4] Error at 'super':")
     assert lines[1] == ""
+
+def test_overloading():
+    completed = subprocess.run(["bin/canidae",  "test/classes/overloading.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 6
+    assert lines[0] == "(1, 2)"
+    assert lines[1] == "(3, 4)"
+    assert lines[2] == "(4, 6)"
+    assert lines[3] == "11"
+    assert lines[4] == "5"
+    
