@@ -50,5 +50,5 @@ def test_binop_type_checking():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Operands must be two numbers")
+    assert lines[0].startswith("Unsupported operands for binary operation")
     assert lines[1].startswith("[line 1]")

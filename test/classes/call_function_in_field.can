@@ -1,3 +1,7 @@
+function println(string) {
+    print string;
+}
+
 class WeirdButValid {
     function __init__(myfunction) {
         this.f = myfunction;

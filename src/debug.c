@@ -116,6 +116,13 @@ static size_t long_instruction(const char *name, segment *s, size_t offset) {
     }
 }
 
+static size_t type_instruction(const char *name, segment *s, size_t offset) {
+    typeofs type = s->bytecode[offset + 1];
+    char type_strings[7][10] = {"num", "bool", "str", "array", "class", "function", "namespace"};
+    printf("%-16s %5u (%s)\n", name, type, type_strings[type]);
+    return offset + 2;
+}
+
 size_t dissassemble_instruction(segment *s, size_t offset) {
     printf("%08lu ", offset);
     if (offset > 0 && s->lines[offset] == s->lines[offset-1]) {
@@ -178,12 +185,18 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return long_instruction("OP_LONG", s, offset);
         case OP_INHERIT:
             return simple_instruction("OP_INHERIT", offset);
+        case OP_TYPEOF:
+            return simple_instruction("OP_TYPEOF", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
             return raw_byte_instruction("OP_POPN", s, offset);
         case OP_CALL:
             return raw_byte_instruction("OP_CALL", s, offset);
+        case OP_PUSH_TYPEOF:
+            return type_instruction("OP_PUSH_TYPEOF", s, offset);
+        case OP_CONV_TYPE:
+            return type_instruction("OP_CONV_TYPE", s, offset);
         case OP_DEFINE_GLOBAL:
             return constant_instruction("OP_DEFINE_GLOBAL", s, offset);
         case OP_GET_GLOBAL:

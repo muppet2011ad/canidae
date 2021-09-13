@@ -1,0 +1,48 @@
+class Vector {
+    function __init__(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    function arg() {
+        return (this.x^2 + this.y^2)^0.5;
+    }
+
+    function __str__() {
+        return "(" + str(this.x) + ", " + str(this.y) + ")";
+    }
+
+    function __add__(b) {
+        let x = this.x + b.x;
+        let y = this.y + b.y;
+        return Vector(x, y);
+    }
+
+    function __sub__(b) {
+        let x = this.x - b.x;
+        let y = this.y - b.y;
+        return Vector(x, y);
+    }
+
+    function __mul__(b) {
+        return (this.x * b.x) + (this.y * b.y);
+    }
+
+    function __num__() {
+        return this.arg();
+    }
+}
+
+let v1 = Vector(1, 2);
+let v2 = Vector(3, 4);
+
+print v1;
+print v2;
+
+let v3 = v1 + v2;
+print v3;
+
+let dp = v1 * v2;
+print dp;
+
+print num(v2);

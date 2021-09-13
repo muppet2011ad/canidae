@@ -5,7 +5,7 @@
         }
 
         function printme() {
-            println("I'm a cup of ", this.type, "!");
+            print "I'm a cup of " + this.type + "!";
         }
 
         function drink() {
@@ -20,7 +20,7 @@
         }
 
         function printme() {
-            println("I'm a mug of ", this.type, " (", this.tea, ")");
+            print "I'm a mug of " + this.type + " (" + this.tea + ")";
         }
     }
 

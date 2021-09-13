@@ -77,7 +77,7 @@ def test_string_concat_wrong_type():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Operands must be two numbers, strings")
+    assert lines[0].startswith("Unsupported operands for binary operation")
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 

@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "object.h"
 #include "stdlib_canidae.h"
+#include "type_conversions.h"
 
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
@@ -68,7 +69,23 @@ void init_VM(VM *vm) {
     reset_stack(vm);
     define_stdlib(vm);
     vm->init_string = NULL;
+    vm->str_string = NULL;
+    vm->num_string = NULL;
+    vm->bool_string = NULL;
+    vm->add_string = NULL;
+    vm->sub_string = NULL;
+    vm->mult_string = NULL;
+    vm->div_string = NULL;
+    vm->pow_string = NULL;
     vm->init_string = copy_string(vm, "__init__", 8);
+    vm->str_string = copy_string(vm, "__str__", 7);
+    vm->num_string = copy_string(vm, "__num__", 7);
+    vm->bool_string = copy_string(vm, "__bool__", 8);
+    vm->add_string = copy_string(vm, "__add__", 7);
+    vm->sub_string = copy_string(vm, "__sub__", 7);
+    vm->mult_string = copy_string(vm, "__mul__", 7);
+    vm->div_string = copy_string(vm, "__div__", 7);
+    vm->pow_string = copy_string(vm, "__pow__", 7);
 }
 
 void destroy_VM(VM *vm) {
@@ -455,6 +472,26 @@ static uint8_t concatenate(VM *vm) {
     return INTERPRET_OK;
 }
 
+static uint8_t convert_type(VM *vm, value converter(VM*, value), object_string *override_function) {
+    value v = peek(vm, 0);
+    uint8_t is_instance = IS_INSTANCE(v);
+    uint8_t overridden = 0;
+    if (is_instance) {
+        object_instance *instance = AS_INSTANCE(v);
+        value method;
+        if (hashmap_get(&instance->class_->methods, override_function, &method)) {
+            return call(vm, AS_CLOSURE(method), 0);
+        }
+    }
+    if (!is_instance || !overridden) {
+        value converted = converter(vm, v);
+        if (IS_NATIVE_ERROR(converted)) return 0;
+        pop(vm);
+        push(vm, converted);
+        return 1;
+    }
+}
+
 static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
     switch (GET_OBJ_TYPE(peek(vm, 1))) {
         case OBJ_ARRAY: {
@@ -526,15 +563,28 @@ static interpret_result run(VM *vm) {
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_CONSTANT_LONG() (frame->closure->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING(constant) AS_STRING(constant)
-    #define BINARY_OP(type, op) \
+    #define BINARY_OP(type, op, override) \
         do { \
             if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
-                runtime_error(vm, "Operands must be numbers."); \
-                return INTERPRET_RUNTIME_ERROR; \
+                uint8_t overriden = 0; \
+                if (IS_INSTANCE(peek(vm, 1))) { \
+                    object_instance *instance = AS_INSTANCE(peek(vm, 1)); \
+                    value v; \
+                    if (hashmap_get(&instance->class_->methods, override, &v)) { \
+                        overriden = call(vm, AS_CLOSURE(v), 1); \
+                        frame = &vm->frames[vm->frame_count-1]; \
+                    } \
+                } \
+                if (!overriden) { \
+                    runtime_error(vm, "Unsupported operands for binary operation."); \
+                    return INTERPRET_RUNTIME_ERROR; \
+                } \
             } \
-            double b = AS_NUMBER(pop(vm)); \
-            double a = AS_NUMBER(pop(vm)); \
-            push(vm, type(a op b)); \
+            else { \
+                double b = AS_NUMBER(pop(vm)); \
+                double a = AS_NUMBER(pop(vm)); \
+                push(vm, type(a op b)); \
+            } \
         } while (0)
 
     #define READ_VARIABLE_ARG() \
@@ -552,7 +602,7 @@ static interpret_result run(VM *vm) {
                 return INTERPRET_RUNTIME_ERROR; \
             } \
             switch (a.type) { \
-                case NUM_TYPE: BINARY_OP(t, op); break; \
+                case NUM_TYPE: BINARY_OP(t, op, NULL); break; \
                 case OBJ_TYPE: { \
                     if (GET_OBJ_TYPE(a) != GET_OBJ_TYPE(b)) { \
                         runtime_error(vm, "Cannot perform comparison on objects of different type."); \
@@ -615,24 +665,37 @@ static interpret_result run(VM *vm) {
                 if ((IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) || (IS_ARRAY(peek(vm, 0)) && IS_ARRAY(peek(vm, 1)))) {
                     if(concatenate(vm) == INTERPRET_RUNTIME_ERROR) return INTERPRET_RUNTIME_ERROR;
                 }
-                else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
-                    double b = AS_NUMBER(pop(vm));
-                    double a = AS_NUMBER(pop(vm));
-                    push(vm, NUMBER_VAL(a + b));
-                } else {
-                    runtime_error(vm, "Operands must be two numbers, strings or arrays.");
-                    return INTERPRET_RUNTIME_ERROR;
+                else {
+                    BINARY_OP(NUMBER_VAL, +, vm->add_string);
                 }
                 break;
             }
-            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
-            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-            case OP_DIVIDE: BINARY_OP(NUMBER_VAL, /); break;
-            case OP_POWER:;
-                double b = AS_NUMBER(pop(vm));
-                double a = AS_NUMBER(pop(vm));
-                push(vm, NUMBER_VAL(pow(a, b)));
+            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -, vm->sub_string); break;
+            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *, vm->mult_string); break;
+            case OP_DIVIDE: BINARY_OP(NUMBER_VAL, /, vm->div_string); break;
+            case OP_POWER: {
+                if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
+                    uint8_t overriden = 0;
+                    if (IS_INSTANCE(peek(vm, 1))) {
+                        object_instance *instance = AS_INSTANCE(peek(vm, 1));
+                        value v;
+                        if (hashmap_get(&instance->class_->methods, vm->pow_string, &v)) {
+                            overriden = call(vm, AS_CLOSURE(v), 1);
+                            frame = &vm->frames[vm->frame_count-1];
+                        }
+                    }
+                    if (!overriden) {
+                        runtime_error(vm, "Unsupported operands for binary operation.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                }
+                else {
+                    double b = AS_NUMBER(pop(vm));
+                    double a = AS_NUMBER(pop(vm));
+                    push(vm, NUMBER_VAL(pow(a, b)));
+                }
                 break;
+            }
             case OP_UNDEFINED: push(vm, UNDEFINED_VAL); break;
             case OP_NULL: push(vm, NULL_VAL); break;
             case OP_TRUE: push(vm, BOOL_VAL(1)); break;
@@ -728,6 +791,41 @@ static interpret_result run(VM *vm) {
                 pop(vm); // Pops subclass
                 break;
             }
+            case OP_TYPEOF: {
+                value v = peek(vm, 0);
+                switch (v.type) {
+                    case NULL_TYPE: pop(vm); push(vm, NULL_VAL); break;
+                    case NUM_TYPE: pop(vm); push(vm, TYPE_VAL(TYPEOF_NUM)); break;
+                    case BOOL_TYPE: pop(vm); push(vm, TYPE_VAL(TYPEOF_BOOL)); break;
+                    case UNDEFINED_TYPE: pop(vm); push(vm, UNDEFINED_VAL); break;
+                    case OBJ_TYPE: {
+                        switch (GET_OBJ_TYPE(v)) {
+                            case OBJ_STRING: pop(vm); push(vm, TYPE_VAL(TYPEOF_STRING)); break;
+                            case OBJ_ARRAY: pop(vm); push(vm, TYPE_VAL(TYPEOF_ARRAY)); break;
+                            case OBJ_CLASS: pop(vm); push(vm, TYPE_VAL(TYPEOF_CLASS)); break;
+                            case OBJ_FUNCTION:
+                            case OBJ_BOUND_METHOD:
+                            case OBJ_CLOSURE:
+                                pop(vm); push(vm, TYPE_VAL(TYPEOF_FUNCTION)); break;
+                            case OBJ_NAMESPACE: pop(vm); push(vm, TYPE_VAL(TYPEOF_NAMESPACE)); break;
+                            case OBJ_INSTANCE: {
+                                object_instance *instance = AS_INSTANCE(v);
+                                pop(vm);
+                                push(vm, OBJ_VAL(instance->class_));
+                                break;
+                            }
+                            default:
+                                runtime_error(vm, "Unsupported type for 'typeof'.");
+                                return INTERPRET_RUNTIME_ERROR;
+                        }
+                        break;
+                    }
+                    default:
+                        runtime_error(vm, "Unsupported type for 'typeof'.");
+                        return INTERPRET_RUNTIME_ERROR;
+                }
+                break;
+            }
             case OP_IMPORT: {
                 object_string *namespace_name = READ_STRING(READ_VARIABLE_CONST());
                 object_string *filename = AS_STRING(peek(vm, 0));
@@ -752,6 +850,33 @@ static interpret_result run(VM *vm) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
+            case OP_PUSH_TYPEOF: {
+                uint8_t arg = READ_BYTE();
+                push(vm, TYPE_VAL(arg));
+                break;
+            }
+            case OP_CONV_TYPE: {
+                uint8_t arg = READ_BYTE();
+                uint8_t result = 0;
+                switch (arg) {
+                    case TYPEOF_NUM: {
+                        result = convert_type(vm, to_num, vm->num_string);
+                        break;
+                    }
+                    case TYPEOF_STRING: {
+                        result = convert_type(vm, to_str, vm->str_string);
+                        break;
+                    }
+                    case TYPEOF_BOOL: {
+                        result = convert_type(vm, to_bool, vm->bool_string);
+                        break;
+                    }
+                    default: break; // Should be unreachable
+                }
+                if (!result) return INTERPRET_RUNTIME_ERROR;
+                frame = &vm->frames[vm->frame_count-1];
                 break;
             }
             case OP_DEFINE_GLOBAL: {

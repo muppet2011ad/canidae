@@ -42,7 +42,7 @@ def test_native(): # Not meant to be a full test of canidae's standard library, 
     assert completed.returncode == 0
     lines = completed.stdout.split("\n")
     assert len(lines) == 2
-    assert lines[0] == "Hello, World!"
+    assert lines[0] == "3"
     assert lines[1] == ""
 
 def test_closure_open():
