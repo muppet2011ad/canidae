@@ -965,6 +965,7 @@ static void import_statement(parser *p, compiler *c, VM *vm) {
 static void print_statement(parser *p, compiler *c, VM *vm) {
     expression(p, c, vm);
     consume(p, TOKEN_SEMICOLON, "Expect ';' after value.");
+    emit_2_bytes(p, c, OP_CONV_TYPE, TYPEOF_STRING);
     emit_byte(p, c, OP_PRINT);
 }
 

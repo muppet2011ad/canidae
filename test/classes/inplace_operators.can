@@ -5,7 +5,7 @@ class Point {
     }
 
     function printme() {
-        println("(", this.x, ", ", this.y, ")");
+        print "(" + str(this.x) + ", " + str(this.y) + ")";
     }
 
     function bigger(bigboinumber) {

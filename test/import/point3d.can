@@ -6,6 +6,6 @@ class Point3D {
     }
 
     function printme() {
-        println("(", this.x, ", ", this.y, ", ", this.z, ")");
+        print "(" + str(this.x) + ", " + str(this.y) + ", " + str(this.z) + ")";
     }
 }

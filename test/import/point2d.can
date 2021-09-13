@@ -5,6 +5,6 @@ class Point2D {
     }
 
     function printme() {
-        println("(", this.x, ", ", this.y, ")");
+        print "(" + str(this.x) + ", " + str(this.y) + ")";
     }
 }
