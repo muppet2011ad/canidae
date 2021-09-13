@@ -167,7 +167,20 @@ static token_type identifier_type(scanner *s) {
                 break;
             }
             break;
-        case 'l': return check_keyword(s, 1, 2, "et", TOKEN_LET);
+        case 'l': 
+            if (s->current - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'e': 
+                        if (s->current - s->start > 2) {
+                            switch (s->start[2]) {
+                                case 't': return check_keyword(s, 3, 0, "", TOKEN_LET);
+                                case 'n': return check_keyword(s, 3, 0, "", TOKEN_LEN);
+                            }
+                        }
+                        break;
+                }
+            }
+            break;
         case 'n': 
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {

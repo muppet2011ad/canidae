@@ -39,6 +39,7 @@ typedef enum {
     OP_LONG,
     OP_INHERIT,
     OP_TYPEOF,
+    OP_LEN,
     // One-byte operand
     OP_POPN,
     OP_CALL,
