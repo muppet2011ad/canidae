@@ -72,10 +72,20 @@ void init_VM(VM *vm) {
     vm->str_string = NULL;
     vm->num_string = NULL;
     vm->bool_string = NULL;
+    vm->add_string = NULL;
+    vm->sub_string = NULL;
+    vm->mult_string = NULL;
+    vm->div_string = NULL;
+    vm->pow_string = NULL;
     vm->init_string = copy_string(vm, "__init__", 8);
     vm->str_string = copy_string(vm, "__str__", 7);
     vm->num_string = copy_string(vm, "__num__", 7);
     vm->bool_string = copy_string(vm, "__bool__", 8);
+    vm->add_string = copy_string(vm, "__add__", 7);
+    vm->sub_string = copy_string(vm, "__sub__", 7);
+    vm->mult_string = copy_string(vm, "__mul__", 7);
+    vm->div_string = copy_string(vm, "__div__", 7);
+    vm->pow_string = copy_string(vm, "__pow__", 7);
 }
 
 void destroy_VM(VM *vm) {
@@ -469,10 +479,7 @@ static uint8_t convert_type(VM *vm, value converter(VM*, value), object_string *
     if (is_instance) {
         object_instance *instance = AS_INSTANCE(v);
         value method;
-        if (!hashmap_get(&instance->class_->methods, override_function, &method)) {
-            overridden = 1;
-        }
-        else {
+        if (hashmap_get(&instance->class_->methods, override_function, &method)) {
             return call(vm, AS_CLOSURE(method), 0);
         }
     }
@@ -556,15 +563,28 @@ static interpret_result run(VM *vm) {
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_CONSTANT_LONG() (frame->closure->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING(constant) AS_STRING(constant)
-    #define BINARY_OP(type, op) \
+    #define BINARY_OP(type, op, override) \
         do { \
             if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) { \
-                runtime_error(vm, "Operands must be numbers."); \
-                return INTERPRET_RUNTIME_ERROR; \
+                uint8_t overriden = 0; \
+                if (IS_INSTANCE(peek(vm, 1))) { \
+                    object_instance *instance = AS_INSTANCE(peek(vm, 1)); \
+                    value v; \
+                    if (hashmap_get(&instance->class_->methods, override, &v)) { \
+                        overriden = call(vm, AS_CLOSURE(v), 1); \
+                        frame = &vm->frames[vm->frame_count-1]; \
+                    } \
+                } \
+                if (!overriden) { \
+                    runtime_error(vm, "Unsupported operands for binary operation."); \
+                    return INTERPRET_RUNTIME_ERROR; \
+                } \
             } \
-            double b = AS_NUMBER(pop(vm)); \
-            double a = AS_NUMBER(pop(vm)); \
-            push(vm, type(a op b)); \
+            else { \
+                double b = AS_NUMBER(pop(vm)); \
+                double a = AS_NUMBER(pop(vm)); \
+                push(vm, type(a op b)); \
+            } \
         } while (0)
 
     #define READ_VARIABLE_ARG() \
@@ -582,7 +602,7 @@ static interpret_result run(VM *vm) {
                 return INTERPRET_RUNTIME_ERROR; \
             } \
             switch (a.type) { \
-                case NUM_TYPE: BINARY_OP(t, op); break; \
+                case NUM_TYPE: BINARY_OP(t, op, NULL); break; \
                 case OBJ_TYPE: { \
                     if (GET_OBJ_TYPE(a) != GET_OBJ_TYPE(b)) { \
                         runtime_error(vm, "Cannot perform comparison on objects of different type."); \
@@ -645,24 +665,37 @@ static interpret_result run(VM *vm) {
                 if ((IS_STRING(peek(vm, 0)) && IS_STRING(peek(vm, 1))) || (IS_ARRAY(peek(vm, 0)) && IS_ARRAY(peek(vm, 1)))) {
                     if(concatenate(vm) == INTERPRET_RUNTIME_ERROR) return INTERPRET_RUNTIME_ERROR;
                 }
-                else if (IS_NUMBER(peek(vm, 0)) && IS_NUMBER(peek(vm, 1))) {
-                    double b = AS_NUMBER(pop(vm));
-                    double a = AS_NUMBER(pop(vm));
-                    push(vm, NUMBER_VAL(a + b));
-                } else {
-                    runtime_error(vm, "Operands must be two numbers, strings or arrays.");
-                    return INTERPRET_RUNTIME_ERROR;
+                else {
+                    BINARY_OP(NUMBER_VAL, +, vm->add_string);
                 }
                 break;
             }
-            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
-            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
-            case OP_DIVIDE: BINARY_OP(NUMBER_VAL, /); break;
-            case OP_POWER:;
-                double b = AS_NUMBER(pop(vm));
-                double a = AS_NUMBER(pop(vm));
-                push(vm, NUMBER_VAL(pow(a, b)));
+            case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -, vm->sub_string); break;
+            case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *, vm->mult_string); break;
+            case OP_DIVIDE: BINARY_OP(NUMBER_VAL, /, vm->div_string); break;
+            case OP_POWER: {
+                if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
+                    uint8_t overriden = 0;
+                    if (IS_INSTANCE(peek(vm, 1))) {
+                        object_instance *instance = AS_INSTANCE(peek(vm, 1));
+                        value v;
+                        if (hashmap_get(&instance->class_->methods, vm->pow_string, &v)) {
+                            overriden = call(vm, AS_CLOSURE(v), 1);
+                            frame = &vm->frames[vm->frame_count-1];
+                        }
+                    }
+                    if (!overriden) {
+                        runtime_error(vm, "Unsupported operands for binary operation.");
+                        return INTERPRET_RUNTIME_ERROR;
+                    }
+                }
+                else {
+                    double b = AS_NUMBER(pop(vm));
+                    double a = AS_NUMBER(pop(vm));
+                    push(vm, NUMBER_VAL(pow(a, b)));
+                }
                 break;
+            }
             case OP_UNDEFINED: push(vm, UNDEFINED_VAL); break;
             case OP_NULL: push(vm, NULL_VAL); break;
             case OP_TRUE: push(vm, BOOL_VAL(1)); break;
