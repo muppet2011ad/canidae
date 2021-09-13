@@ -9,14 +9,10 @@
 #include <math.h>
 #include "stdlib_canidae.h"
 
-static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value to string - should be given name "str"
-    if (argc != 1) {
-        runtime_error(vm, "Function 'str' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    switch (args[0].type) {
+value to_str(VM *vm, value arg) {
+    switch (arg.type) {
         case NUM_TYPE: {
-            double number = AS_NUMBER(args[0]);
+            double number = AS_NUMBER(arg);
             int len = snprintf(NULL, 0, "%g", number);
             char *result = ALLOCATE(vm, char, len + 1);
             snprintf(result, len + 1, "%g", number);
@@ -29,13 +25,13 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
             return OBJ_VAL(copy_string(vm, "undefined", 9));
         }
         case BOOL_TYPE: {
-            return OBJ_VAL(copy_string(vm, args[0].as.boolean ? "true" : "false", args[0].as.boolean ? 4 : 5));
+            return OBJ_VAL(copy_string(vm, arg.as.boolean ? "true" : "false", arg.as.boolean ? 4 : 5));
         }
         case TYPE_TYPE: {
             char type_strings[7][10] = {"num", "bool", "str", "array", "class", "function", "namespace"};
-            long len = snprintf(NULL, 0, "<type %s>", type_strings[args[0].as.type]);
+            long len = snprintf(NULL, 0, "<type %s>", type_strings[arg.as.type]);
             char *result = ALLOCATE(vm, char, len + 1);
-            snprintf(result, len + 1, "<type %s>", type_strings[args[0].as.type]);
+            snprintf(result, len + 1, "<type %s>", type_strings[arg.as.type]);
             return OBJ_VAL(take_string(vm, result, len));
         }
         case OBJ_TYPE: {
@@ -44,22 +40,22 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                 char *result = ALLOCATE(vm, char, len + 1); \
                 snprintf(result, len + 1, "<function %s>", function->name->chars); \
                 return OBJ_VAL(take_string(vm, result, len));
-            switch (GET_OBJ_TYPE(args[0])) {
+            switch (GET_OBJ_TYPE(arg)) {
                 case OBJ_STRING: {
-                    return args[0];
+                    return arg;
                 }
                 case OBJ_NATIVE: {
                     return OBJ_VAL(copy_string(vm, "<native function>", 17));
                 }
                 case OBJ_FUNCTION: {
-                    FN_TO_STRING(AS_FUNCTION(args[0]));
+                    FN_TO_STRING(AS_FUNCTION(arg));
                 }
                 case OBJ_CLOSURE: {
-                    FN_TO_STRING(AS_CLOSURE(args[0])->function);
+                    FN_TO_STRING(AS_CLOSURE(arg)->function);
                 }
                 case OBJ_ARRAY: {
                     #define APPEND_VAL(i) \
-                        object_string *item_as_str = AS_STRING(str_native(vm, 1, &(array->arr.values[i]))); \
+                        object_string *item_as_str = AS_STRING(to_str(vm, (array->arr.values[i]))); \
                         size_t newlen = len + item_as_str->length + 2; \
                         if (newlen > capacity) { \
                             size_t oldc = capacity; \
@@ -67,7 +63,7 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                             result = GROW_ARRAY(vm, char, result, oldc, capacity); \
                         } \
                         strcat(result, item_as_str->chars);
-                    object_array *array = AS_ARRAY(args[0]);
+                    object_array *array = AS_ARRAY(arg);
                     size_t capacity = 2;
                     size_t len = 2;
                     char *result = ALLOCATE(vm, char, capacity);
@@ -84,24 +80,24 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
                     #undef APPEND_VAL
                 }
                 case OBJ_CLASS: {
-                    object_class *class_ = AS_CLASS(args[0]);
+                    object_class *class_ = AS_CLASS(arg);
                     long len = snprintf(NULL, 0, "<class %s>", class_->name->chars);
                     char *result = ALLOCATE(vm, char, len + 1);
                     snprintf(result, len + 1, "<class %s>", class_->name->chars);
                     return OBJ_VAL(take_string(vm, result, len));
                 }
                 case OBJ_INSTANCE: {
-                    object_instance *instance = AS_INSTANCE(args[0]);
-                    long len = snprintf(NULL, 0, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
+                    object_instance *instance = AS_INSTANCE(arg);
+                    long len = snprintf(NULL, 0, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(arg));
                     char *result = ALLOCATE(vm, char, len + 1);
-                    snprintf(result, len + 1, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(args[0]));
+                    snprintf(result, len + 1, "<%s instance at %p>", instance->class_->name->chars, (void*) AS_OBJ(arg));
                     return OBJ_VAL(take_string(vm, result, len));
                 }
                 case OBJ_BOUND_METHOD: {
-                    FN_TO_STRING(AS_BOUND_METHOD(args[0])->method->function);
+                    FN_TO_STRING(AS_BOUND_METHOD(arg)->method->function);
                 }
                 case OBJ_NAMESPACE: {
-                    object_namespace *namespace = AS_NAMESPACE(args[0]);
+                    object_namespace *namespace = AS_NAMESPACE(arg);
                     long len = snprintf(NULL, 0, "<namespace %s>", namespace->name->chars);
                     char *result = ALLOCATE(vm, char, len + 1);
                     snprintf(result, len + 1, "<namespace %s>", namespace->name->chars);
@@ -119,18 +115,8 @@ static value str_native(VM *vm, uint8_t argc, value *args) { // Converts value t
     return NATIVE_ERROR_VAL;
 }
 
-static void print_args(VM *vm, uint8_t argc, value *args) { // Helper function to print values
-    for (uint8_t i = 0; i < argc; i++) {
-        printf(AS_CSTRING(str_native(vm, 1, &args[i])));
-    }
-}
-
-static value num_native(VM *vm, uint8_t argc, value *args) { // Converts to number, should be given name "num"
-    if (argc != 1) {
-        runtime_error(vm, "Function 'num' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    value v = args[0];
+value to_num(VM *vm, value arg) {
+    value v = arg;
     switch (v.type) {
         case NUM_TYPE: return v;
         case BOOL_TYPE: return NUMBER_VAL(v.as.boolean);
@@ -159,87 +145,6 @@ static value num_native(VM *vm, uint8_t argc, value *args) { // Converts to numb
     }
 }
 
-static value int_native(VM *vm, uint8_t argc, value *args) { // Converts to number then rounds, should be given name "int"
-    if (argc != 1) {
-        runtime_error(vm, "Function 'int' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    return NUMBER_VAL(round(AS_NUMBER(num_native(vm, 1, &args[0]))));
-}
-
-static value bool_native(VM *vm, uint8_t argc, value *args) { // Evaluates whether its arg is truthy or falsey, should be given name "bool"
-    if (argc != 1) {
-        runtime_error(vm, "Function 'bool' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    return BOOL_VAL(!is_falsey(args[0]));
-}
-
-static value len_native(VM *vm, uint8_t argc, value *args) { // Gets length of array or string, should be given name "len"
-    if (argc != 1) {
-        runtime_error(vm, "Function 'len' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    if (args[0].type != OBJ_TYPE) {
-        runtime_error(vm, "Invalid type to get length.");
-        return NATIVE_ERROR_VAL;
-    }
-    switch(GET_OBJ_TYPE(args[0])) {
-        case OBJ_ARRAY: return NUMBER_VAL(AS_ARRAY(args[0])->arr.len);
-        case OBJ_STRING: return NUMBER_VAL(AS_STRING(args[0])->length);
-        default: {
-            runtime_error(vm, "Invalid type to get length.");
-            return NATIVE_ERROR_VAL;
-        }
-    }
-}
-
-static value read_line(VM *vm, FILE *f) { // Helper function to read a line as an obj_string, not intended to be a directly accessible part of the lib
-    size_t capacity = 0;
-    size_t len = 0;
-    char *s = ALLOCATE(vm, char, 8);
-    char c;
-    while (EOF != (c = fgetc(f)) && c != '\r' && c != '\n') {
-        if (capacity == len) {
-            size_t oldc = capacity;
-            capacity = GROW_CAPACITY(capacity);
-            s = GROW_ARRAY(vm, char, s, oldc, capacity);
-        } 
-        s[len++] = c;
-    }
-    s[len++] = '\0';
-    value canidae_string = OBJ_VAL(copy_string(vm, s, len));
-    free(s);
-    return canidae_string;
-}
-
-static value input(VM *vm, uint8_t argc, value *args) {
-    print_args(vm, argc, args);
-    value line = read_line(vm, stdin);
-    return line;
-}
-
-static value clock_native(VM *vm, uint8_t argc, value *args) {
-    if (argc != 0) {
-        runtime_error(vm, "Function 'clock' expects 0 arguments (got %u).", argc);
-        return NATIVE_ERROR_VAL;
-    }
-    return NUMBER_VAL(((double)clock()/CLOCKS_PER_SEC));
-}
-
-static value print_native(VM *vm, uint8_t argc, value *args) {
-    print_args(vm, argc, args);
-    puts("");
-    return NULL_VAL;
-}
-
-void define_stdlib(VM *vm) {
-    define_native(vm, "clock", clock_native);
-    define_native(vm, "str", str_native);
-    define_native(vm, "num", num_native);
-    define_native(vm, "int", int_native);
-    define_native(vm, "bool", bool_native);
-    define_native(vm, "len", len_native);
-    define_native(vm, "println", print_native);
-    define_native(vm, "input", input);
+value to_bool(VM *vm, value arg) {
+    return BOOL_VAL(!is_falsey(arg));
 }

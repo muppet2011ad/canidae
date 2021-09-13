@@ -26,6 +26,9 @@ typedef struct VM {
     hashmap strings;
     hashmap globals;
     object_string *init_string;
+    object_string *str_string;
+    object_string *num_string;
+    object_string *bool_string;
     uint8_t owns_strings; // Secondary VMs don't own their strings table so have to leave it free
     uint8_t long_instruction;
     uint8_t gc_allowed;

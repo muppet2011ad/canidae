@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "object.h"
 #include "stdlib_canidae.h"
+#include "type_conversions.h"
 
 static void reset_stack(VM *vm) {
     vm->stack_ptr = vm->stack;
@@ -68,7 +69,13 @@ void init_VM(VM *vm) {
     reset_stack(vm);
     define_stdlib(vm);
     vm->init_string = NULL;
+    vm->str_string = NULL;
+    vm->num_string = NULL;
+    vm->bool_string = NULL;
     vm->init_string = copy_string(vm, "__init__", 8);
+    vm->str_string = copy_string(vm, "__str__", 7);
+    vm->num_string = copy_string(vm, "__num__", 7);
+    vm->bool_string = copy_string(vm, "__bool__", 8);
 }
 
 void destroy_VM(VM *vm) {
@@ -455,6 +462,29 @@ static uint8_t concatenate(VM *vm) {
     return INTERPRET_OK;
 }
 
+static uint8_t convert_type(VM *vm, value converter(VM*, value), object_string *override_function) {
+    value v = peek(vm, 0);
+    uint8_t is_instance = IS_INSTANCE(v);
+    uint8_t overridden = 0;
+    if (is_instance) {
+        object_instance *instance = AS_INSTANCE(v);
+        value method;
+        if (!hashmap_get(&instance->class_->methods, override_function, &method)) {
+            overridden = 1;
+        }
+        else {
+            return call(vm, AS_CLOSURE(method), 0);
+        }
+    }
+    if (!is_instance || !overridden) {
+        value converted = converter(vm, v);
+        if (IS_NATIVE_ERROR(converted)) return 0;
+        pop(vm);
+        push(vm, converted);
+        return 1;
+    }
+}
+
 static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
     switch (GET_OBJ_TYPE(peek(vm, 1))) {
         case OBJ_ARRAY: {
@@ -796,7 +826,24 @@ static interpret_result run(VM *vm) {
             }
             case OP_CONV_TYPE: {
                 uint8_t arg = READ_BYTE();
-                // TODO
+                uint8_t result = 0;
+                switch (arg) {
+                    case TYPEOF_NUM: {
+                        result = convert_type(vm, to_num, vm->num_string);
+                        break;
+                    }
+                    case TYPEOF_STRING: {
+                        result = convert_type(vm, to_str, vm->str_string);
+                        break;
+                    }
+                    case TYPEOF_BOOL: {
+                        result = convert_type(vm, to_bool, vm->bool_string);
+                        break;
+                    }
+                    default: break; // Should be unreachable
+                }
+                if (!result) return INTERPRET_RUNTIME_ERROR;
+                frame = &vm->frames[vm->frame_count-1];
                 break;
             }
             case OP_DEFINE_GLOBAL: {
