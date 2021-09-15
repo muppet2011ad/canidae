@@ -112,7 +112,7 @@ def test_loop_scope_correct():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Undefined variable")
+    assert "Undefined variable" in lines[0]
     assert lines[1].startswith("[line 3]")
     assert lines[2] == ""
 

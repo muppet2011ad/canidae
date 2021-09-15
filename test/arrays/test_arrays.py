@@ -41,7 +41,7 @@ def test_array_index_get_oob_1():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Array index 3 exceeds max index of array (2)."
+    assert "Array index 3 exceeds max index of array (2)." in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 
@@ -50,7 +50,7 @@ def test_array_index_get_oob_2():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Index is less than min index of array (-3)."
+    assert "Index is less than min index of array (-3)." in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 
@@ -69,7 +69,7 @@ def test_array_index_set_oob():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Index is less than min index of string (-3)."
+    assert "Index is less than min index of string (-3)." in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 

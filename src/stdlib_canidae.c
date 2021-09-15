@@ -30,12 +30,12 @@ static value read_line(VM *vm, FILE *f) { // Helper function to read a line as a
 
 static value input(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
-        runtime_error(vm, "Function 'input' expects 1 argument (got %u).", argc);
-        return NATIVE_ERROR_VAL;
+        if(!runtime_error(vm, ARGUMENT_ERROR, "Function 'input' expects 1 argument (got %u).", argc)) return NATIVE_ERROR_VAL;
+        return NULL_VAL;
     }
     if (!IS_STRING(args[0])) {
-        runtime_error(vm, "Function 'input' expects a string.");
-        return NATIVE_ERROR_VAL;
+        if(!runtime_error(vm, TYPE_ERROR, "Function 'input' expects a string.")) return NATIVE_ERROR_VAL;
+        return NULL_VAL;
     }
     print_value(args[0]);
     value line = read_line(vm, stdin);
@@ -44,8 +44,8 @@ static value input(VM *vm, uint8_t argc, value *args) {
 
 static value clock_native(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
-        runtime_error(vm, "Function 'clock' expects 0 arguments (got %u).", argc);
-        return NATIVE_ERROR_VAL;
+        if(!runtime_error(vm, ARGUMENT_ERROR, "Function 'clock' expects 0 arguments (got %u).", argc)) return NATIVE_ERROR_VAL;
+        return NULL_VAL;
     }
     return NUMBER_VAL(((double)clock()/CLOCKS_PER_SEC));
 }

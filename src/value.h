@@ -26,6 +26,17 @@ typedef enum {
     TYPEOF_NAMESPACE,
 } typeofs;
 
+typedef enum {
+    NAME_ERROR,
+    TYPE_ERROR,
+    VALUE_ERROR,
+    IMPORT_ERROR,
+    ARGUMENT_ERROR,
+    RECURSION_ERROR,
+    MEMORY_ERROR,
+    INDEX_ERROR,
+} error_type;
+
 typedef struct object object;
 typedef struct object_string object_string;
 typedef struct object_array object_array;
@@ -37,6 +48,7 @@ typedef struct object_class object_class;
 typedef struct object_instance object_instance;
 typedef struct object_bound_method object_bound_method;
 typedef struct object_namespace object_namespace;
+typedef struct object_exception object_exception;
 
 typedef struct {
     value_type type;

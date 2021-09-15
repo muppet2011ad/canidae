@@ -44,6 +44,7 @@ typedef struct VM {
     size_t bytes_allocated;
     size_t gc_threshold;
     object_upvalue *open_upvalues;
+    object_exception *exception_stack;
     object *objects;
 } VM;
 
@@ -62,7 +63,7 @@ void push(VM *vm, value val);
 value pop(VM *vm);
 value popn(VM *vm, size_t n);
 void define_native(VM *vm, const char *name, value (*function)(VM *vm, uint8_t argc, value *argv) );
-void runtime_error(VM *vm, const char *format, ...);
+uint8_t runtime_error(VM *vm, error_type type, const char *format, ...);
 uint8_t is_falsey(value v);
 void enable_gc(VM *vm);
 void disable_gc(VM *vm);

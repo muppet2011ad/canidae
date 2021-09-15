@@ -73,7 +73,7 @@ def test_use_in_own_dec_1():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Undefined variable")
+    assert "Undefined variable" in lines[0]
     assert lines[1].startswith("[line 1]")
     assert lines[2] == ""
 
@@ -112,7 +112,7 @@ def test_assignment_operator_type_check_1():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Unsupported operands for binary operation")
+    assert "Unsupported operands for binary operation" in lines[0]
     assert lines[1].startswith("[line 4]")
     assert lines[2] == ""
 
@@ -121,6 +121,6 @@ def test_assignment_operator_type_check_2():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Unsupported operands for binary operation")
+    assert "Unsupported operands for binary operation" in lines[0]
     assert lines[1].startswith("[line 3]")
     assert lines[2] == ""

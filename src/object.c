@@ -85,6 +85,14 @@ object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source) {
     return namespace;
 }
 
+object_exception *new_exception(VM *vm, object_string *message, error_type type) {
+    object_exception *exception = ALLOCATE_OBJ(vm, object_exception, OBJ_EXCEPTION);
+    exception->message = message;
+    exception->type = type;
+    exception->next = NULL;
+    return exception;
+}
+
 static object_string *allocate_string(VM *vm, char *chars, size_t length, uint32_t hash) {
     object_string *string = ALLOCATE_OBJ(vm, object_string, OBJ_STRING);
     string->length = length;
@@ -228,6 +236,11 @@ void print_object(value v) {
             break;
         case OBJ_NAMESPACE:
             printf("<namespace %s>", AS_NAMESPACE(v)->name->chars);
+            break;
+        case OBJ_EXCEPTION:
+            char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+            printf("<exception %s>", error_strings[AS_EXCEPTION(v)->type]);
+            break;
         default:
             break;
     }

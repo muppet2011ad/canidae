@@ -24,7 +24,7 @@ def test_badfile():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Could not open file")
+    assert "Could not open file" in lines[0]
     assert lines[1].startswith("[line 1]")
     assert lines[2] == ""
 

@@ -40,7 +40,7 @@ def test_string_array_index_oob_1():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Index 100 exceeds max index of string (11)."
+    assert "Index 100 exceeds max index of string (11)." in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 
@@ -49,7 +49,7 @@ def test_string_array_index_oob_2():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Index is less than min index of string (-12)."
+    assert "Index is less than min index of string (-12)." in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 
@@ -58,7 +58,7 @@ def test_string_array_index_set():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0] == "Attempt to set at index of non-array value."
+    assert "Attempt to set at index of non-array value." in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 
@@ -77,7 +77,7 @@ def test_string_concat_wrong_type():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Unsupported operands for binary operation")
+    assert "Unsupported operands for binary operation" in lines[0]
     assert lines[1].startswith("[line 2]")
     assert lines[2] == ""
 

@@ -33,7 +33,7 @@ def test_incorrect_args():
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
     assert len(lines) == 3
-    assert lines[0].startswith("Function 'add' expects 2 arguments (got 1)")
+    assert "Function 'add' expects 2 arguments (got 1)" in lines[0]
     assert lines[1].startswith("[line 6]")
     assert lines[2] == ""
 
