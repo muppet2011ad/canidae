@@ -51,6 +51,12 @@ static value clock_native(VM *vm, uint8_t argc, value *args) {
 }
 
 void define_stdlib(VM *vm) {
+    disable_gc(vm);
     define_native(vm, "clock", clock_native);
     define_native(vm, "input", input);
+    char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+    for (int i = 0; i < 8; i++) {
+        define_native_global(vm, error_strings[i], ERROR_TYPE_VAL(i));
+    }
+    enable_gc(vm);
 }

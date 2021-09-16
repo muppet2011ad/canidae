@@ -237,10 +237,11 @@ void print_object(value v) {
         case OBJ_NAMESPACE:
             printf("<namespace %s>", AS_NAMESPACE(v)->name->chars);
             break;
-        case OBJ_EXCEPTION:
+        case OBJ_EXCEPTION:{
             char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
             printf("<exception %s>", error_strings[AS_EXCEPTION(v)->type]);
             break;
+        }
         default:
             break;
     }

@@ -34,6 +34,13 @@ value to_str(VM *vm, value arg) {
             snprintf(result, len + 1, "<type %s>", type_strings[arg.as.type]);
             return OBJ_VAL(take_string(vm, result, len));
         }
+        case ERROR_TYPE: {
+            char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+            long len =  snprintf(NULL, 0, "<errortype %s>", error_strings[AS_ERROR_TYPE(arg)]);
+            char *result = ALLOCATE(vm, char, len + 1);
+            snprintf(result, len + 1, "<errortype %s>", error_strings[AS_ERROR_TYPE(arg)]);
+            return OBJ_VAL(take_string(vm, result, len));
+        }
         case OBJ_TYPE: {
             #define FN_TO_STRING(function) \
                 long len = snprintf(NULL, 0, "<function %s>", function->name->chars); \

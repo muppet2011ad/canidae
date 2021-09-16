@@ -13,6 +13,7 @@ typedef enum {
     OBJ_TYPE,
     UNDEFINED_TYPE,
     TYPE_TYPE,
+    ERROR_TYPE,
     NATIVE_ERROR_TYPE, // Used only by native functions to signal a runtime error so the VM knows to stop
 } value_type;
 
@@ -56,6 +57,7 @@ typedef struct {
         double number;
         uint8_t boolean;
         typeofs type;
+        error_type err;
         object *obj;
     } as;
 
@@ -72,11 +74,14 @@ typedef struct {
 #define NULL_VAL ((value) {NULL_TYPE, {.number = 0}})
 #define UNDEFINED_VAL ((value) {UNDEFINED_TYPE, {.number = 0}})
 #define TYPE_VAL(t) ((value) {TYPE_TYPE, {.type = t}})
+#define ERROR_TYPE_VAL(t) ((value) {ERROR_TYPE, {.err = t}})
 #define OBJ_VAL(o) ((value) {OBJ_TYPE, {.obj = (object*)o}})
 #define NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.number = 0}})
 
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v) ((v).as.boolean)
+#define AS_TYPE(v) ((v).as.type)
+#define AS_ERROR_TYPE(v) ((v).as.err)
 #define AS_OBJ(v) ((v).as.obj)
 
 #define IS_NUMBER(v) ((v).type == NUM_TYPE)
@@ -85,6 +90,7 @@ typedef struct {
 #define IS_OBJ(v) ((v).type == OBJ_TYPE)
 #define IS_UNDEFINED(v) ((v).type == UNDEFINED_TYPE)
 #define IS_TYPE_TYPE(v) ((v).type == TYPE_TYPE)
+#define IS_ERROR_TYPE(v) ((v).type == ERROR_TYPE)
 #define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE)
 
 void init_value_array(value_array *arr);

@@ -69,6 +69,10 @@ void define_native(VM *vm, const char *name, native_function function) {
     popn(vm, 2);
 }
 
+void define_native_global(VM *vm, const char *name, value val) {
+    hashmap_set(&vm->globals, vm, copy_string(vm, name, strlen(name)), val);
+}
+
 void init_VM(VM *vm) {
     vm->source_path = NULL;
     vm->stack = calloc(STACK_INITIAL, sizeof(value));
@@ -509,6 +513,7 @@ static uint8_t convert_type(VM *vm, value converter(VM*, value), object_string *
         push(vm, converted);
         return 1;
     }
+    return 0;
 }
 
 static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {

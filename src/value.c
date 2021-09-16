@@ -41,7 +41,12 @@ void print_value(value val) {
         case UNDEFINED_TYPE:
             printf("undefined"); break;
         case TYPE_TYPE: {
-            printf("<type %s>", type_strings[val.as.type]); break;
+            printf("<type %s>", type_strings[AS_TYPE(val)]); break;
+        }
+        case ERROR_TYPE: {
+            char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+            printf("<errortype %s>", error_strings[AS_ERROR_TYPE(val)]);
+            break;
         }
         case OBJ_TYPE: print_object(val); break;
     }

@@ -68,5 +68,6 @@ uint8_t is_falsey(value v);
 void enable_gc(VM *vm);
 void disable_gc(VM *vm);
 void resize_stack(VM *vm, size_t target_size);
+void define_native_global(VM *vm, const char *name, value val);
 
 #endif
