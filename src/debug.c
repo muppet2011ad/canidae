@@ -123,6 +123,13 @@ static size_t type_instruction(const char *name, segment *s, size_t offset) {
     return offset + 2;
 }
 
+static size_t register_catch_instruction(const char *name, segment *s, size_t offset) {
+    uint8_t num_errors = s->bytecode[offset + 1];
+    uint64_t catch_addr = ((uint64_t) s->bytecode[offset + 2] << 40) + ((uint64_t) s->bytecode[offset + 3] << 32) + ((uint64_t) s->bytecode[offset + 4] << 24) + ((uint64_t) s->bytecode[offset + 5] << 16) + ((uint64_t) s->bytecode[offset + 6] << 8) + ((uint64_t) s->bytecode[offset+7]);
+    printf("%-16s    (catching %u error types) -> %lu\n", name, num_errors, catch_addr);
+    return offset + 8;
+}
+
 size_t dissassemble_instruction(segment *s, size_t offset) {
     printf("%08lu ", offset);
     if (offset > 0 && s->lines[offset] == s->lines[offset-1]) {
@@ -187,6 +194,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_INHERIT", offset);
         case OP_TYPEOF:
             return simple_instruction("OP_TYPEOF", offset);
+        case OP_UNREGISTER_CATCH:
+            return simple_instruction("OP_UNREGISTER_CATCH", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:
@@ -258,6 +267,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return invoke_instruction("OP_INVOKE_SUPER", s, offset, 0);
         case OP_IMPORT:
             return constant_instruction("OP_IMPORT", s, offset);
+        case OP_REGISTER_CATCH:
+            return register_catch_instruction("OP_REGISTER_CATCH", s, offset);
         default:
             fprintf(stderr, "Unrecognised opcode %d.\n", instruction);
             return s->len;

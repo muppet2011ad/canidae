@@ -993,6 +993,61 @@ static void return_statement(parser *p, compiler *c, VM *vm) {
     }
 }
 
+static uint8_t error_list(parser *p, compiler *c, VM *vm) {
+    uint8_t argc = 0;
+    if (!check(p, TOKEN_AS)) {
+        do {
+            if (argc == 255) error(p, "Can't have more than 255 error types checked.");
+            expression(p, c, vm);
+            argc++;
+        } while (match(p, TOKEN_COMMA));
+    }
+    return argc;
+}
+
+static void try_statement(parser *p, compiler *c, VM *vm) {
+    size_t initial_jump = emit_jump(p, c, OP_JUMP); // This will be patched to code that evaluates the types of error we want to catch
+    size_t register_catch = c->function->seg.len; // After that code is executed, we'll loop back here to execute the register catch
+    uint8_t bytes[8] = {OP_REGISTER_CATCH, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    emit_bytes(p, c, bytes , 8); // Emit REGISTER_CATCH (we'll come back to the operands later)
+    begin_scope(c);
+    statement(p, c, vm); // Compile try block
+    end_scope(p, c);
+    size_t jump_out = emit_jump(p, c, OP_JUMP); // After try block, we want to jump over the catch block
+    size_t catch_exit_jump = 0;
+    if (match(p, TOKEN_CATCH)) { // Catch block is optional
+        begin_scope(c);
+        patch_jump(p, c, initial_jump); // Initial jump lands here
+        uint8_t num_errors = error_list(p, c, vm);
+        emit_loop(p, c, register_catch); // Jump back to register catch instruction
+
+        size_t catch_destination = c->function->seg.len;
+        if (catch_destination > UINT48_MAX) error(p, "Offset of catch block is too high.");
+        uint8_t catch_operands[7] = {num_errors, catch_destination >> 40, catch_destination >> 32, catch_destination >> 24, catch_destination >> 16, catch_destination >> 8, catch_destination};
+        for (size_t i = 0; i < 7; i++) c->function->seg.bytecode[register_catch + i + 1] = catch_operands[i]; // Patch the address of the catch block into the instruction
+        if (match(p, TOKEN_AS)) { // Supports binding exception to a name
+            uint32_t exception_name = parse_variable(p, c, vm, "Expect identifier after 'as'.");
+            define_variable(p, c, exception_name);
+        }
+
+        statement(p, c, vm); // Compile catch block
+        end_scope(p, c);
+        catch_exit_jump = emit_jump(p, c, OP_JUMP);
+    }
+    else {
+        patch_jump(p, c, initial_jump);
+        emit_loop(p, c, register_catch);
+        size_t catch_destination = c->function->seg.len;
+        if (catch_destination > UINT48_MAX) error(p, "Offset of catch block is too high.");
+        uint8_t catch_operands[7] = {0, catch_destination >> 40, catch_destination >> 32, catch_destination >> 24, catch_destination >> 16, catch_destination >> 8, catch_destination};
+        for (size_t i = 0; i < 7; i++) c->function->seg.bytecode[register_catch + i + 1] = catch_operands[i]; // Patch the address of the catch block into the instruction
+        catch_exit_jump = emit_jump(p, c, OP_JUMP);
+    }
+    patch_jump(p, c, jump_out);
+    emit_byte(p, c, OP_UNREGISTER_CATCH);
+    if (catch_exit_jump) patch_jump(p, c, catch_exit_jump);
+}
+
 static void synchronise(parser *p) {
     p->panic = 0;
 
@@ -1064,6 +1119,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
     }
     else if (match(p, TOKEN_IMPORT)) {
         import_statement(p, c, vm);
+    }
+    else if (match(p, TOKEN_TRY)) {
+        try_statement(p, c, vm);
     }
     else {
         expression_statement(p, c, vm);
