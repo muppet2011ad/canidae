@@ -1028,7 +1028,7 @@ static void try_statement(parser *p, compiler *c, VM *vm) {
         if (match(p, TOKEN_AS)) { // Supports binding exception to a name
             uint32_t exception_name = parse_variable(p, c, vm, "Expect identifier after 'as'.");
             define_variable(p, c, exception_name);
-        }
+        } else emit_byte(p, c, OP_POP); // If we're not binding to a name, it the exception should be popped off the stack.
 
         statement(p, c, vm); // Compile catch block
         end_scope(p, c);
@@ -1041,6 +1041,7 @@ static void try_statement(parser *p, compiler *c, VM *vm) {
         if (catch_destination > UINT48_MAX) error(p, "Offset of catch block is too high.");
         uint8_t catch_operands[7] = {0, catch_destination >> 40, catch_destination >> 32, catch_destination >> 24, catch_destination >> 16, catch_destination >> 8, catch_destination};
         for (size_t i = 0; i < 7; i++) c->function->seg.bytecode[register_catch + i + 1] = catch_operands[i]; // Patch the address of the catch block into the instruction
+        emit_byte(p, c, OP_POP);
         catch_exit_jump = emit_jump(p, c, OP_JUMP);
     }
     patch_jump(p, c, jump_out);

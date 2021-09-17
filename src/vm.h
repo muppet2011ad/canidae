@@ -9,6 +9,15 @@
 #define FRAMES_MAX 1024
 #define GC_THRESHOLD_INITIAL 512 * 1024
 
+typedef struct exception_catch {
+    size_t catch_address;
+    size_t stack_size_at_try;
+    uint16_t frame_at_try;
+    value catching_errors[256];
+    uint8_t num_errors;
+    struct exception_catch *next;
+} exception_catch;
+
 typedef struct {
     object_closure *closure;
     uint8_t *ip;
@@ -20,6 +29,7 @@ typedef struct VM {
     char *source_path;
     call_frame frames[FRAMES_MAX];
     uint16_t frame_count;
+    call_frame *active_frame;
     value *stack;
     size_t stack_capacity;
     value *stack_ptr;
@@ -45,6 +55,7 @@ typedef struct VM {
     size_t gc_threshold;
     object_upvalue *open_upvalues;
     object_exception *exception_stack;
+    exception_catch *catch_stack;
     object *objects;
 } VM;
 
@@ -69,5 +80,6 @@ void enable_gc(VM *vm);
 void disable_gc(VM *vm);
 void resize_stack(VM *vm, size_t target_size);
 void define_native_global(VM *vm, const char *name, value val);
+uint8_t raise(VM *vm, object_exception *exception);
 
 #endif

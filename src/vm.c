@@ -52,14 +52,46 @@ uint8_t runtime_error(VM *vm, error_type type, const char *format, ...) { // Ret
     object_exception *exception = new_exception(vm, take_string(vm, error_message, len), type);
     va_end(args);
 
+    return raise(vm, exception);    
+}
+
+uint8_t raise(VM *vm, object_exception *exception) { // Returns whether or not the exception is handled (1 is handled, 0 is unhandled)
     exception->next = vm->exception_stack;
     vm->exception_stack = exception->next;
 
-    if (1) { // Code to check for except statements will go here
+    exception_catch *catcher = vm->catch_stack;
+    while (catcher != NULL) {
+        uint8_t matched = 0;
+        if (catcher->num_errors == 0) break;
+        else {
+            for (uint8_t i = 0; i < catcher->num_errors; i++) {
+                if (AS_ERROR_TYPE(catcher->catching_errors[i]) == exception->type) {
+                    matched = 1;
+                    break;
+                }
+            }
+            if (matched) break;
+        }
+        // If we get to here, this catch statement isn't catching this exception, so we pop it and move onto the next
+        exception_catch *old = catcher;
+        catcher = catcher->next;
+        free(old);
+    }
+
+    if (catcher == NULL) { // Code to check for except statements will go here
         output_runtime_error(vm, exception);
         return 0;
     }
-    else return 1;
+    else {
+        vm->frame_count = catcher->frame_at_try;
+        vm->active_frame = &vm->frames[vm->frame_count-1];
+        vm->stack_ptr -= (STACK_LEN(vm) - catcher->stack_size_at_try);
+        vm->active_frame->ip = &vm->active_frame->closure->function->seg.bytecode[catcher->catch_address];
+        push(vm, OBJ_VAL(exception));
+        vm->catch_stack = catcher->next;
+        free(catcher);
+        return 1;
+    }
 }
 
 void define_native(VM *vm, const char *name, native_function function) {
@@ -94,6 +126,7 @@ void init_VM(VM *vm) {
     reset_stack(vm);
     define_stdlib(vm);
     vm->exception_stack = NULL;
+    vm->catch_stack = NULL;
     vm->init_string = NULL;
     vm->str_string = NULL;
     vm->num_string = NULL;
@@ -570,13 +603,14 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
 }
 
 static interpret_result run(VM *vm) {
-    call_frame *frame = &vm->frames[vm->frame_count - 1];
-    #define READ_BYTE() (*frame->ip++)
-    #define READ_CONSTANT() (frame->closure->function->seg.constants.values[READ_BYTE()])    
+    vm->active_frame = &vm->frames[vm->frame_count - 1];
+    #define READ_BYTE() (*vm->active_frame->ip++)
+    #define READ_CONSTANT() (vm->active_frame->closure->function->seg.constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
     #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
+    #define READ_UINT48() ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
-    #define READ_CONSTANT_LONG() (frame->closure->function->seg.constants.values[READ_UINT24()])
+    #define READ_CONSTANT_LONG() (vm->active_frame->closure->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING(constant) AS_STRING(constant)
     #define BINARY_OP(type, op, override) \
         do { \
@@ -587,7 +621,7 @@ static interpret_result run(VM *vm) {
                     value v; \
                     if (hashmap_get(&instance->class_->methods, override, &v)) { \
                         overriden = call(vm, AS_CLOSURE(v), 1); \
-                        frame = &vm->frames[vm->frame_count-1]; \
+                        vm->active_frame = &vm->frames[vm->frame_count-1]; \
                     } \
                 } \
                 if (!overriden) { \
@@ -652,20 +686,20 @@ static interpret_result run(VM *vm) {
                 printf("]");
             }
             printf("\n");
-            dissassemble_instruction(&frame->closure->function->seg, (size_t) (frame->ip - frame->closure->function->seg.bytecode));
+            dissassemble_instruction(&vm->active_frame->closure->function->seg, (size_t) (vm->active_frame->ip - vm->active_frame->closure->function->seg.bytecode));
         #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN:{
                 value result = pop(vm);
-                close_upvalues(vm, frame->slots);
+                close_upvalues(vm, vm->active_frame->slots);
                 vm->frame_count--;
                 if (vm->frame_count == 0) {
                     pop(vm);
                     return INTERPRET_OK;
                 }
-                vm->stack_ptr = frame->slots;
+                vm->stack_ptr = vm->active_frame->slots;
                 push(vm, result);
-                frame = &vm->frames[vm->frame_count - 1];
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_NEGATE:
@@ -695,7 +729,7 @@ static interpret_result run(VM *vm) {
                         value v;
                         if (hashmap_get(&instance->class_->methods, vm->pow_string, &v)) {
                             overriden = call(vm, AS_CLOSURE(v), 1);
-                            frame = &vm->frames[vm->frame_count-1];
+                            vm->active_frame = &vm->frames[vm->frame_count-1];
                         }
                     }
                     if (!overriden) {
@@ -864,7 +898,7 @@ static interpret_result run(VM *vm) {
                             value v;
                             if (hashmap_get(&instance->class_->methods, vm->len_string, &v)) {
                                 result = call(vm, AS_CLOSURE(v), 0);
-                                frame = &vm->frames[vm->frame_count-1];
+                                vm->active_frame = &vm->frames[vm->frame_count-1];
                             }
                         }
                         default: break;
@@ -873,6 +907,14 @@ static interpret_result run(VM *vm) {
                 if (!result) {
                     if(!runtime_error(vm, TYPE_ERROR, "Unsupported type for 'len' operator.")) return INTERPRET_RUNTIME_ERROR;
                     continue;
+                }
+                break;
+            }
+            case OP_UNREGISTER_CATCH: {
+                exception_catch *old = vm->catch_stack;
+                if (old) {
+                    vm->catch_stack = old->next;
+                    free(old);
                 }
                 break;
             }
@@ -899,7 +941,7 @@ static interpret_result run(VM *vm) {
                 if (!call_value(vm, peek(vm, argc), argc)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count - 1];
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_PUSH_TYPEOF: {
@@ -926,7 +968,7 @@ static interpret_result run(VM *vm) {
                     default: break; // Should be unreachable
                 }
                 if (!result) return INTERPRET_RUNTIME_ERROR;
-                frame = &vm->frames[vm->frame_count-1];
+                vm->active_frame = &vm->frames[vm->frame_count-1];
                 break;
             }
             case OP_DEFINE_GLOBAL: {
@@ -955,39 +997,39 @@ static interpret_result run(VM *vm) {
                 break;
             }
             case OP_GET_LOCAL: {
-                push(vm, frame->slots[READ_VARIABLE_ARG()]);
+                push(vm, vm->active_frame->slots[READ_VARIABLE_ARG()]);
                 break;
             }
             case OP_SET_LOCAL: {
-                frame->slots[READ_VARIABLE_ARG()] = peek(vm, 0);
+                vm->active_frame->slots[READ_VARIABLE_ARG()] = peek(vm, 0);
                 break;
             }
             case OP_GET_UPVALUE: {
-                push(vm, *frame->closure->upvalues[READ_VARIABLE_ARG()]->location);
+                push(vm, *vm->active_frame->closure->upvalues[READ_VARIABLE_ARG()]->location);
                 break;
             }
             case OP_SET_UPVALUE: {
-                *frame->closure->upvalues[READ_VARIABLE_ARG()]->location = peek(vm, 0);
+                *vm->active_frame->closure->upvalues[READ_VARIABLE_ARG()]->location = peek(vm, 0);
                 break;
             }
             case OP_JUMP_IF_FALSE: {
                 uint64_t offset = READ_UINT40();
-                if (is_falsey(peek(vm, 0))) frame->ip += offset;
+                if (is_falsey(peek(vm, 0))) vm->active_frame->ip += offset;
                 break;
             }
             case OP_JUMP_IF_TRUE: {
                 uint64_t offset = READ_UINT40();
-                if (!is_falsey(peek(vm, 0))) frame->ip += offset;
+                if (!is_falsey(peek(vm, 0))) vm->active_frame->ip += offset;
                 break;
             }
             case OP_JUMP: {
                 uint64_t offset = READ_UINT40();
-                frame->ip += offset;
+                vm->active_frame->ip += offset;
                 break;
             }
             case OP_LOOP: {
                 uint64_t offset = READ_UINT40();
-                frame->ip -= offset;
+                vm->active_frame->ip -= offset;
                 break;
             }
             case OP_CLOSURE: {
@@ -998,10 +1040,10 @@ static interpret_result run(VM *vm) {
                     uint8_t is_local = READ_BYTE();
                     uint32_t index = READ_UINT24();
                     if (is_local) {
-                        closure->upvalues[i] = capture_upvalue(vm, frame->slots + index);
+                        closure->upvalues[i] = capture_upvalue(vm, vm->active_frame->slots + index);
                     }
                     else {
-                        closure->upvalues[i] = frame->closure->upvalues[index];
+                        closure->upvalues[i] = vm->active_frame->closure->upvalues[index];
                     }
                 }
                 break;
@@ -1109,7 +1151,7 @@ static interpret_result run(VM *vm) {
                 if (!invoke(vm, method, argc)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count - 1];
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_GET_SUPER: {
@@ -1127,7 +1169,30 @@ static interpret_result run(VM *vm) {
                 if (!invoke_from_class(vm, superclass, method, argc)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count-1];
+                vm->active_frame = &vm->frames[vm->frame_count-1];
+                break;
+            }
+            case OP_REGISTER_CATCH: {
+                uint8_t had_error = 0;
+                uint8_t num_errors = READ_BYTE();
+                size_t catch_addr = READ_UINT48();
+                exception_catch *catcher = ALLOCATE(vm, exception_catch, 1);
+                for (uint8_t i = 0; i < num_errors; i++) {
+                    value val = pop(vm);
+                    if (!IS_ERROR_TYPE(val)) {
+                        if (!runtime_error(vm, TYPE_ERROR, "Expected an error type in catch statement.")) return INTERPRET_RUNTIME_ERROR;
+                        had_error = 1;
+                        break;
+                    }
+                    else catcher->catching_errors[i] = val;
+                }
+                if (had_error) continue;
+                catcher->catch_address = catch_addr;
+                catcher->frame_at_try = vm->frame_count;
+                catcher->num_errors = num_errors;
+                catcher->stack_size_at_try = STACK_LEN(vm);
+                catcher->next = vm->catch_stack;
+                vm->catch_stack = catcher;
                 break;
             }
         }
@@ -1138,6 +1203,7 @@ static interpret_result run(VM *vm) {
     #undef READ_CONSTANT_LONG
     #undef READ_UINT24
     #undef READ_UINT40
+    #undef READ_UINT48
     #undef READ_UINT56
     #undef READ_STRING
     #undef BINARY_COMPARISON
