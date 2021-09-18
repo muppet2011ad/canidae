@@ -952,6 +952,7 @@ static interpret_result run(VM *vm) {
             case OP_CONV_TYPE: {
                 uint8_t arg = READ_BYTE();
                 uint8_t result = 0;
+                disable_gc(vm);
                 switch (arg) {
                     case TYPEOF_NUM: {
                         result = convert_type(vm, to_num, vm->num_string);
@@ -967,6 +968,7 @@ static interpret_result run(VM *vm) {
                     }
                     default: break; // Should be unreachable
                 }
+                enable_gc(vm);
                 if (!result) return INTERPRET_RUNTIME_ERROR;
                 vm->active_frame = &vm->frames[vm->frame_count-1];
                 break;
