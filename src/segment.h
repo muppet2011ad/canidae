@@ -42,6 +42,7 @@ typedef enum {
     OP_TYPEOF,
     OP_LEN,
     OP_UNREGISTER_CATCH,
+    OP_MARK_ERRORS_HANDLED,
     // One-byte operand
     OP_POPN,
     OP_CALL,

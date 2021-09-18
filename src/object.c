@@ -85,11 +85,12 @@ object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source) {
     return namespace;
 }
 
-object_exception *new_exception(VM *vm, object_string *message, error_type type) {
+object_exception *new_exception(VM *vm, object_string *message, error_type type, size_t line) {
     object_exception *exception = ALLOCATE_OBJ(vm, object_exception, OBJ_EXCEPTION);
     exception->message = message;
     exception->type = type;
     exception->next = NULL;
+    exception->line = line;
     return exception;
 }
 

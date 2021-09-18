@@ -120,6 +120,7 @@ struct object_exception {
     object obj;
     object_string *message;
     error_type type;
+    size_t line;
     object_exception *next;
 };
 
@@ -131,7 +132,7 @@ object_class *new_class(VM *vm, object_string *name);
 object_instance *new_instance(VM *vm, object_class *class_);
 object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *method);
 object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source);
-object_exception *new_exception(VM *vm, object_string *message, error_type type);
+object_exception *new_exception(VM *vm, object_string *message, error_type type, size_t line);
 object_string *take_string(VM *vm, char *chars, size_t length);
 object_string *copy_string(VM *vm, const char *chars, size_t length);
 object_array *allocate_array(VM *vm, value *values, size_t length);

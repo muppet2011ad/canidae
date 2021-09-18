@@ -1047,6 +1047,7 @@ static void try_statement(parser *p, compiler *c, VM *vm) {
     patch_jump(p, c, jump_out);
     emit_byte(p, c, OP_UNREGISTER_CATCH);
     if (catch_exit_jump) patch_jump(p, c, catch_exit_jump);
+    emit_byte(p, c, OP_MARK_ERRORS_HANDLED);
 }
 
 static void synchronise(parser *p) {

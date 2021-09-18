@@ -18,7 +18,8 @@ static void reset_stack(VM *vm) {
     vm->open_upvalues = NULL;
 }
 
-void output_runtime_error(VM *vm, object_exception *exception) {
+void stacktrace(VM *vm) {
+    object_exception *exception = vm->exception_stack;
     char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
     fprintf(stderr, "[%s] ", error_strings[exception->type]);
     fprintf(stderr, exception->message->chars);
@@ -37,6 +38,11 @@ void output_runtime_error(VM *vm, object_exception *exception) {
         }
     }
 
+    while (exception->next != NULL) {
+        exception = exception->next;
+        fprintf(stderr, "\nError was encountered during the handling of the following error:\n[%s] %s [line %lu]\n", error_strings[exception->type], exception->message->chars, exception->line);
+    }
+
     reset_stack(vm);
 }
 
@@ -49,7 +55,13 @@ uint8_t runtime_error(VM *vm, error_type type, const char *format, ...) { // Ret
     char *error_message = ALLOCATE(vm, char, len + 1);
     vsnprintf(error_message, len + 1, format, args_2);
     
-    object_exception *exception = new_exception(vm, take_string(vm, error_message, len), type);
+    call_frame *frame = vm->active_frame;
+    object_function *function = frame->closure->function;
+
+    size_t instruction = frame->ip - function->seg.bytecode - 1;
+    disable_gc(vm);
+    object_exception *exception = new_exception(vm, take_string(vm, error_message, len), type, function->seg.lines[instruction]);
+    enable_gc(vm);
     va_end(args);
 
     return raise(vm, exception);    
@@ -57,7 +69,7 @@ uint8_t runtime_error(VM *vm, error_type type, const char *format, ...) { // Ret
 
 uint8_t raise(VM *vm, object_exception *exception) { // Returns whether or not the exception is handled (1 is handled, 0 is unhandled)
     exception->next = vm->exception_stack;
-    vm->exception_stack = exception->next;
+    vm->exception_stack = exception;
 
     exception_catch *catcher = vm->catch_stack;
     while (catcher != NULL) {
@@ -79,7 +91,7 @@ uint8_t raise(VM *vm, object_exception *exception) { // Returns whether or not t
     }
 
     if (catcher == NULL) { // Code to check for except statements will go here
-        output_runtime_error(vm, exception);
+        stacktrace(vm);
         return 0;
     }
     else {
@@ -916,6 +928,10 @@ static interpret_result run(VM *vm) {
                     vm->catch_stack = old->next;
                     free(old);
                 }
+                break;
+            }
+            case OP_MARK_ERRORS_HANDLED: {
+                vm->exception_stack = NULL;
                 break;
             }
             case OP_IMPORT: {
