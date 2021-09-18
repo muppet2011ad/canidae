@@ -72,10 +72,10 @@ def test_use_in_own_dec_1():
     completed = subprocess.run(["bin/canidae",  "test/variables/use_in_own_dec_1.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Undefined variable" in lines[0]
-    assert lines[1].startswith("[line 1]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 1]")
+    assert lines[3] == ""
 
 def test_use_in_own_dec_2():
     completed = subprocess.run(["bin/canidae",  "test/variables/use_in_own_dec_2.can"], text=True, capture_output=True)
@@ -111,16 +111,16 @@ def test_assignment_operator_type_check_1():
     completed = subprocess.run(["bin/canidae",  "test/variables/assignment_operator_type_check_1.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Unsupported operands for binary operation" in lines[0]
-    assert lines[1].startswith("[line 4]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 4]")
+    assert lines[3] == ""
 
 def test_assignment_operator_type_check_2():
     completed = subprocess.run(["bin/canidae",  "test/variables/assignment_operator_type_check_2.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Unsupported operands for binary operation" in lines[0]
-    assert lines[1].startswith("[line 3]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 3]")
+    assert lines[3] == ""

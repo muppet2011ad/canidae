@@ -32,10 +32,10 @@ def test_incorrect_args():
     completed = subprocess.run(["bin/canidae",  "test/functions/incorrect_args.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Function 'add' expects 2 arguments (got 1)" in lines[0]
-    assert lines[1].startswith("[line 6]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 6]")
+    assert lines[3] == ""
 
 def test_native(): # Not meant to be a full test of canidae's standard library, but just call one function to make sure that the mechanism works
     completed = subprocess.run(["bin/canidae",  "test/functions/native.can"], text=True, capture_output=True)

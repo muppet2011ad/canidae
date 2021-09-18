@@ -198,6 +198,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return simple_instruction("OP_UNREGISTER_CATCH", offset);
         case OP_MARK_ERRORS_HANDLED:
             return simple_instruction("OP_MARK_ERRORS_HANDLED", offset);
+        case OP_RAISE:
+            return simple_instruction("OP_RAISE", offset);
         case OP_CONSTANT:
             return constant_instruction("OP_CONSTANT", s, offset);
         case OP_POPN:

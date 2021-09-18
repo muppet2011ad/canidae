@@ -1050,6 +1050,12 @@ static void try_statement(parser *p, compiler *c, VM *vm) {
     emit_byte(p, c, OP_MARK_ERRORS_HANDLED);
 }
 
+static void raise_statement(parser *p, compiler *c, VM *vm) {
+    expression(p, c, vm);
+    consume(p, TOKEN_SEMICOLON, "Expect ';' at end of raise statement.");
+    emit_byte(p, c, OP_RAISE);
+}
+
 static void synchronise(parser *p) {
     p->panic = 0;
 
@@ -1124,6 +1130,9 @@ static void statement(parser *p, compiler *c, VM *vm) {
     }
     else if (match(p, TOKEN_TRY)) {
         try_statement(p, c, vm);
+    }
+    else if (match(p, TOKEN_RAISE)) {
+        raise_statement(p, c, vm);
     }
     else {
         expression_statement(p, c, vm);

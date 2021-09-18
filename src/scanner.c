@@ -199,7 +199,14 @@ static token_type identifier_type(scanner *s) {
             break;
         case 'o': return check_keyword(s, 1, 1, "r", TOKEN_OR);
         case 'p': return check_keyword(s, 1, 4, "rint", TOKEN_PRINT);
-        case 'r': return check_keyword(s, 1, 5, "eturn", TOKEN_RETURN);
+        case 'r': 
+            if (s->current - s->start > 1) {
+                switch (s->start[1]) {
+                    case 'a': return check_keyword(s, 2, 3, "ise", TOKEN_RAISE);
+                    case 'e': return check_keyword(s, 2, 4, "turn", TOKEN_RETURN);
+                }
+            }
+            break;
         case 's': 
             if (s->current - s->start > 1) {
                 switch (s->start[1]) {

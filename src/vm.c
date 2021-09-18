@@ -23,13 +23,14 @@ void stacktrace(VM *vm) {
     char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
     fprintf(stderr, "[%s] ", error_strings[exception->type]);
     fprintf(stderr, exception->message->chars);
-    fputs("\n", stderr);
+    fprintf(stderr, " [line %lu]", exception->line);
+    fputs("\nRaised at:\n", stderr);
 
     for (int32_t i = vm->frame_count - 1; i >= 0; i--) {
         call_frame *frame = &vm->frames[i];
         object_function *function = frame->closure->function;
         size_t instruction = frame->ip - function->seg.bytecode - 1;
-        fprintf(stderr, "[line %u] in ", function->seg.lines[instruction]);
+        fprintf(stderr, "\t[line %u] in ", function->seg.lines[instruction]);
         if (function->name == NULL) {
             fprintf(stderr, "script\n");
         }
@@ -68,8 +69,10 @@ uint8_t runtime_error(VM *vm, error_type type, const char *format, ...) { // Ret
 }
 
 uint8_t raise(VM *vm, object_exception *exception) { // Returns whether or not the exception is handled (1 is handled, 0 is unhandled)
-    exception->next = vm->exception_stack;
-    vm->exception_stack = exception;
+    if (exception != vm->exception_stack) {
+        exception->next = vm->exception_stack;
+        vm->exception_stack = exception;
+    }
 
     exception_catch *catcher = vm->catch_stack;
     while (catcher != NULL) {
@@ -932,6 +935,16 @@ static interpret_result run(VM *vm) {
             }
             case OP_MARK_ERRORS_HANDLED: {
                 vm->exception_stack = NULL;
+                break;
+            }
+            case OP_RAISE: {
+                value val = pop(vm);
+                if (!IS_EXCEPTION(val)) {
+                    if (!runtime_error(vm, TYPE_ERROR, "Can only raise exceptions.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
+                }
+                object_exception *exception = AS_EXCEPTION(val);
+                if(!raise(vm, exception)) return INTERPRET_RUNTIME_ERROR;
                 break;
             }
             case OP_IMPORT: {

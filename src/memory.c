@@ -116,6 +116,10 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_namespace, obj);
             break;
         }
+        case OBJ_EXCEPTION: {
+            FREE(vm, object_exception, obj);
+            break;
+        }
     }
 }
 

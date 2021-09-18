@@ -111,10 +111,10 @@ def test_loop_scope_correct():
     completed = subprocess.run(["bin/canidae",  "test/loops/for/scope_correct.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Undefined variable" in lines[0]
-    assert lines[1].startswith("[line 3]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 3]")
+    assert lines[3] == ""
 
 def test_loop_for_infinite():
     completed = subprocess.run(["bin/canidae",  "test/loops/for/infinite.can"], text=True, capture_output=True)

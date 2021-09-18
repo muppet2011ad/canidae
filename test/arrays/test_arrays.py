@@ -40,19 +40,19 @@ def test_array_index_get_oob_1():
     completed = subprocess.run(["bin/canidae",  "test/arrays/array_index_get_oob_1.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Array index 3 exceeds max index of array (2)." in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def test_array_index_get_oob_2():
     completed = subprocess.run(["bin/canidae",  "test/arrays/array_index_get_oob_2.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Index is less than min index of array (-3)." in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def array_index_set():
     completed = subprocess.run(["bin/canidae",  "test/arrays/array_index_set.can"], text=True, capture_output=True)
@@ -68,10 +68,10 @@ def test_array_index_set_oob():
     completed = subprocess.run(["bin/canidae",  "test/arrays/array_index_set_oob.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Index is less than min index of string (-3)." in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def test_array_2d():
     completed = subprocess.run(["bin/canidae",  "test/arrays/array_2d.can"], text=True, capture_output=True)

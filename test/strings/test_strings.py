@@ -39,28 +39,28 @@ def test_string_array_index_oob_1():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_array_index_oob_1.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Index 100 exceeds max index of string (11)." in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def test_string_array_index_oob_2():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_array_index_oob_2.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Index is less than min index of string (-12)." in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def test_string_array_index_set():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_array_index_set.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Attempt to set at index of non-array value." in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def test_string_concatenation():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_concatenation.can"], text=True, capture_output=True)
@@ -76,10 +76,10 @@ def test_string_concat_wrong_type():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_concat_wrong_type.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Unsupported operands for binary operation" in lines[0]
-    assert lines[1].startswith("[line 2]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
 
 def string_comparison():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_comparison.can"], text=True, capture_output=True)
