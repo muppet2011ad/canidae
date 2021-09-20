@@ -76,7 +76,8 @@ typedef struct {
 #define TYPE_VAL(t) ((value) {TYPE_TYPE, {.type = t}})
 #define ERROR_TYPE_VAL(t) ((value) {ERROR_TYPE, {.err = t}})
 #define OBJ_VAL(o) ((value) {OBJ_TYPE, {.obj = (object*)o}})
-#define NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.number = 0}})
+#define NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.boolean = 0}})
+#define HANDLED_NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.boolean = 1}})
 
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v) ((v).as.boolean)
@@ -91,7 +92,8 @@ typedef struct {
 #define IS_UNDEFINED(v) ((v).type == UNDEFINED_TYPE)
 #define IS_TYPE_TYPE(v) ((v).type == TYPE_TYPE)
 #define IS_ERROR_TYPE(v) ((v).type == ERROR_TYPE)
-#define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE)
+#define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE && (v).as.boolean == 0)
+#define IS_HANDLED_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE && (v).as.boolean == 1)
 
 void init_value_array(value_array *arr);
 void write_to_value_array(VM *vm, value_array *arr, value val);

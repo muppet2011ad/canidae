@@ -41,7 +41,7 @@ void stacktrace(VM *vm) {
 
     while (exception->next != NULL) {
         exception = exception->next;
-        fprintf(stderr, "\nError was encountered during the handling of the following error:\n[%s] %s [line %lu]\n", error_strings[exception->type], exception->message->chars, exception->line);
+        fprintf(stderr, "\nError was encountered during the handling of the following error:\n\t[%s] %s [line %lu]\n", error_strings[exception->type], exception->message->chars, exception->line);
     }
 
     reset_stack(vm);
@@ -152,6 +152,8 @@ void init_VM(VM *vm) {
     vm->div_string = NULL;
     vm->pow_string = NULL;
     vm->len_string = NULL;
+    vm->message_string = NULL;
+    vm->type_string = NULL;
     vm->init_string = copy_string(vm, "__init__", 8);
     vm->str_string = copy_string(vm, "__str__", 7);
     vm->num_string = copy_string(vm, "__num__", 7);
@@ -162,6 +164,8 @@ void init_VM(VM *vm) {
     vm->div_string = copy_string(vm, "__div__", 7);
     vm->pow_string = copy_string(vm, "__pow__", 7);
     vm->len_string = copy_string(vm, "__len__", 7);
+    vm->message_string = copy_string(vm, "message", 7);
+    vm->type_string = copy_string(vm, "type", 4);
 }
 
 void destroy_VM(VM *vm) {
@@ -382,8 +386,9 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 value result = native(vm, argc, vm->stack_ptr - argc);
                 enable_gc(vm); // Re-enables afterwards
                 FREE(vm, char, ALLOCATE(vm, char, 1)); // Code triggers gc after function call if we've reached the threshold - the whole block essentially defers gc until after the native function
-                vm->stack_ptr -= argc + 1;
                 if (IS_NATIVE_ERROR(result)) return 0;
+                if (IS_HANDLED_NATIVE_ERROR(result)) return 1;
+                vm->stack_ptr -= argc + 1;
                 push(vm, result);
                 return 1;
             }
@@ -1085,8 +1090,8 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_PROPERTY: {
                 value obj = peek(vm, 0);
-                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
-                    if(!runtime_error(vm, TYPE_ERROR, "Only instances and namespaces have properties.")) return INTERPRET_RUNTIME_ERROR;
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj) || IS_EXCEPTION(obj))) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances, namespaces and exceptions have properties.")) return INTERPRET_RUNTIME_ERROR;
                     continue;
                 }
                 if (IS_INSTANCE(obj)) {
@@ -1115,6 +1120,22 @@ static interpret_result run(VM *vm) {
                     }
                     else {
                         if(!runtime_error(vm, NAME_ERROR, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
+                    }
+                }
+                else if (IS_EXCEPTION(obj)) {
+                    object_exception *exception = AS_EXCEPTION(obj);
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    if (name == vm->message_string) {
+                        pop(vm);
+                        push(vm, OBJ_VAL(exception->message));
+                    }
+                    else if (name == vm->type_string) {
+                        pop(vm);
+                        push(vm, ERROR_TYPE_VAL(exception->type));
+                    }
+                    else {
+                        if (!runtime_error(vm, NAME_ERROR, "Exceptions do not have property '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
                         continue;
                     }
                 }
@@ -1123,8 +1144,8 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_PROPERTY_KEEP_REF: {
                 value obj = peek(vm, 0);
-                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
-                    if(!runtime_error(vm, TYPE_ERROR, "Only instances and namespaces have properties.")) return INTERPRET_RUNTIME_ERROR;
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj) || IS_EXCEPTION(obj))) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances, namespaces and exceptions have properties.")) return INTERPRET_RUNTIME_ERROR;
                     continue;
                 }
                 if (IS_INSTANCE(obj)) {
@@ -1154,13 +1175,31 @@ static interpret_result run(VM *vm) {
                         continue;
                     }
                 }
+                else if (IS_EXCEPTION(obj)) {
+                    object_exception *exception = AS_EXCEPTION(obj);
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    if (name == vm->message_string) {
+                        push(vm, OBJ_VAL(exception->message));
+                    }
+                    else if (name == vm->type_string) {
+                        push(vm, ERROR_TYPE_VAL(exception->type));
+                    }
+                    else {
+                        if (!runtime_error(vm, NAME_ERROR, "Exceptions do not have property '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
+                    }
+                }
 
                 break;
             }
             case OP_SET_PROPERTY: {
                 value obj = peek(vm, 1);
+                if (IS_EXCEPTION(obj)) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Properties of exceptions cannot be set.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
+                }
                 if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
-                    if(!runtime_error(vm, TYPE_ERROR, "Only instances and namespaces have fields")) return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances and namespaces have fields.")) return INTERPRET_RUNTIME_ERROR;
                     continue;
                 }
                 hashmap *h; // Instance fields or namespace values goes here

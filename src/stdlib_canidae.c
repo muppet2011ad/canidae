@@ -31,11 +31,11 @@ static value read_line(VM *vm, FILE *f) { // Helper function to read a line as a
 static value input(VM *vm, uint8_t argc, value *args) {
     if (argc != 0) {
         if(!runtime_error(vm, ARGUMENT_ERROR, "Function 'input' expects 1 argument (got %u).", argc)) return NATIVE_ERROR_VAL;
-        return NULL_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
     }
     if (!IS_STRING(args[0])) {
         if(!runtime_error(vm, TYPE_ERROR, "Function 'input' expects a string.")) return NATIVE_ERROR_VAL;
-        return NULL_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
     }
     print_value(args[0]);
     value line = read_line(vm, stdin);
@@ -50,6 +50,28 @@ static value clock_native(VM *vm, uint8_t argc, value *args) {
     return NUMBER_VAL(((double)clock()/CLOCKS_PER_SEC));
 }
 
+static value exception_native(VM *vm, uint8_t argc, value *args) {
+    // Starts with checking the arguments to make sure we can continue
+    if (argc != 2) {
+        if(!runtime_error(vm, ARGUMENT_ERROR, "Function 'exception' expects 2 arguments (got %u).", argc)) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    if (!IS_ERROR_TYPE(args[0])) {
+        if(!runtime_error(vm, TYPE_ERROR, "Function 'exception' expects its first argument is an error type.")) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    if (!IS_STRING(args[1])) {
+        if(!runtime_error(vm, TYPE_ERROR, "Function 'exception' expects its second argument is a string.")) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    call_frame *frame = vm->active_frame;
+    object_function *function = frame->closure->function;
+    size_t instruction = frame->ip - function->seg.bytecode - 1;
+
+    object_exception *exception = new_exception(vm, AS_STRING(args[1]), AS_ERROR_TYPE(args[0]), function->seg.lines[instruction]);
+    return OBJ_VAL(exception);
+}
+
 void define_stdlib(VM *vm) {
     disable_gc(vm);
     define_native(vm, "clock", clock_native);
@@ -58,5 +80,6 @@ void define_stdlib(VM *vm) {
     for (int i = 0; i < 8; i++) {
         define_native_global(vm, error_strings[i], ERROR_TYPE_VAL(i));
     }
+    define_native(vm, "exception", exception_native);
     enable_gc(vm);
 }

@@ -119,14 +119,14 @@ value to_str(VM *vm, value arg) {
                 }
                 default:
                     if(!runtime_error(vm, TYPE_ERROR, "Unprintable object type (how did you even access this?)")) return NATIVE_ERROR_VAL;
-                    return NULL_VAL;
+                    return HANDLED_NATIVE_ERROR_VAL;
             }
             #undef FN_TO_STRING
             break;
         }
     }
     if(!runtime_error(vm, TYPE_ERROR, "Failed to convert value to string.")) return NATIVE_ERROR_VAL;
-    return NULL_VAL;
+    return HANDLED_NATIVE_ERROR_VAL;
 }
 
 value to_num(VM *vm, value arg) {
@@ -145,17 +145,17 @@ value to_num(VM *vm, value arg) {
                     }
                     else {
                         if(!runtime_error(vm, VALUE_ERROR, "Could not convert string '%s' to number.")) return NATIVE_ERROR_VAL;
-                        return NULL_VAL;
+                        return HANDLED_NATIVE_ERROR_VAL;
                     }
                 }
                 default: {
                     if(!runtime_error(vm, TYPE_ERROR, "Invalid type for conversion to number.")) return NATIVE_ERROR_VAL;
-                    return NULL_VAL;
+                    return HANDLED_NATIVE_ERROR_VAL;
                 }
             }
         default:
             if(!runtime_error(vm, TYPE_ERROR, "Failed to convert value to number.")) return NATIVE_ERROR_VAL;
-            return NULL_VAL;
+            return HANDLED_NATIVE_ERROR_VAL;
     }
 }
 

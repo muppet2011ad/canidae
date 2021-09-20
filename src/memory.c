@@ -147,6 +147,8 @@ static void mark_roots(VM *vm) {
     mark_object(vm, (object*)vm->div_string);
     mark_object(vm, (object*)vm->pow_string);
     mark_object(vm, (object*)vm->len_string);
+    mark_object(vm, (object*)vm->message_string);
+    mark_object(vm, (object*)vm->type_string);
 
     mark_object(vm, (object*)vm->exception_stack);
 }
