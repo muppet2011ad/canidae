@@ -995,7 +995,7 @@ static void return_statement(parser *p, compiler *c, VM *vm) {
 
 static uint8_t error_list(parser *p, compiler *c, VM *vm) {
     uint8_t argc = 0;
-    if (!check(p, TOKEN_AS)) {
+    if (!check(p, TOKEN_AS) && !check(p, TOKEN_THEN)) {
         do {
             if (argc == 255) error(p, "Can't have more than 255 error types checked.");
             expression(p, c, vm);
@@ -1029,6 +1029,8 @@ static void try_statement(parser *p, compiler *c, VM *vm) {
             uint32_t exception_name = parse_variable(p, c, vm, "Expect identifier after 'as'.");
             define_variable(p, c, exception_name);
         } else emit_byte(p, c, OP_POP); // If we're not binding to a name, it the exception should be popped off the stack.
+
+        consume(p, TOKEN_THEN, "Expect 'then' after catch statement.");
 
         statement(p, c, vm); // Compile catch block
         end_scope(p, c);
