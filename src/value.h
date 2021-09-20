@@ -13,6 +13,7 @@ typedef enum {
     OBJ_TYPE,
     UNDEFINED_TYPE,
     TYPE_TYPE,
+    ERROR_TYPE,
     NATIVE_ERROR_TYPE, // Used only by native functions to signal a runtime error so the VM knows to stop
 } value_type;
 
@@ -26,6 +27,17 @@ typedef enum {
     TYPEOF_NAMESPACE,
 } typeofs;
 
+typedef enum {
+    NAME_ERROR,
+    TYPE_ERROR,
+    VALUE_ERROR,
+    IMPORT_ERROR,
+    ARGUMENT_ERROR,
+    RECURSION_ERROR,
+    MEMORY_ERROR,
+    INDEX_ERROR,
+} error_type;
+
 typedef struct object object;
 typedef struct object_string object_string;
 typedef struct object_array object_array;
@@ -37,6 +49,7 @@ typedef struct object_class object_class;
 typedef struct object_instance object_instance;
 typedef struct object_bound_method object_bound_method;
 typedef struct object_namespace object_namespace;
+typedef struct object_exception object_exception;
 
 typedef struct {
     value_type type;
@@ -44,6 +57,7 @@ typedef struct {
         double number;
         uint8_t boolean;
         typeofs type;
+        error_type err;
         object *obj;
     } as;
 
@@ -60,11 +74,15 @@ typedef struct {
 #define NULL_VAL ((value) {NULL_TYPE, {.number = 0}})
 #define UNDEFINED_VAL ((value) {UNDEFINED_TYPE, {.number = 0}})
 #define TYPE_VAL(t) ((value) {TYPE_TYPE, {.type = t}})
+#define ERROR_TYPE_VAL(t) ((value) {ERROR_TYPE, {.err = t}})
 #define OBJ_VAL(o) ((value) {OBJ_TYPE, {.obj = (object*)o}})
-#define NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.number = 0}})
+#define NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.boolean = 0}})
+#define HANDLED_NATIVE_ERROR_VAL ((value) {NATIVE_ERROR_TYPE, {.boolean = 1}})
 
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v) ((v).as.boolean)
+#define AS_TYPE(v) ((v).as.type)
+#define AS_ERROR_TYPE(v) ((v).as.err)
 #define AS_OBJ(v) ((v).as.obj)
 
 #define IS_NUMBER(v) ((v).type == NUM_TYPE)
@@ -73,7 +91,9 @@ typedef struct {
 #define IS_OBJ(v) ((v).type == OBJ_TYPE)
 #define IS_UNDEFINED(v) ((v).type == UNDEFINED_TYPE)
 #define IS_TYPE_TYPE(v) ((v).type == TYPE_TYPE)
-#define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE)
+#define IS_ERROR_TYPE(v) ((v).type == ERROR_TYPE)
+#define IS_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE && (v).as.boolean == 0)
+#define IS_HANDLED_NATIVE_ERROR(v) ((v).type == NATIVE_ERROR_TYPE && (v).as.boolean == 1)
 
 void init_value_array(value_array *arr);
 void write_to_value_array(VM *vm, value_array *arr, value val);

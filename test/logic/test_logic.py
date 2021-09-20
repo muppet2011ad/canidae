@@ -74,19 +74,19 @@ def test_inequality_wrong_type_1():
     completed = subprocess.run(["bin/canidae",  "test/logic/inequality_wrong_type_1.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Cannot perform comparison on values of different type" in lines[0]
-    assert lines[1].startswith("[line 1]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 1]")
+    assert lines[3] == ""
 
 def test_inequality_wrong_type_2():
     completed = subprocess.run(["bin/canidae",  "test/logic/inequality_wrong_type_2.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
+    assert len(lines) == 4
     assert "Cannot perform comparison on objects of different type" in lines[0]
-    assert lines[1].startswith("[line 1]")
-    assert lines[2] == ""
+    assert lines[2].startswith("\t[line 1]")
+    assert lines[3] == ""
 
 def test_logic_operators():
     completed = subprocess.run(["bin/canidae",  "test/logic/logic_operators.can"], text=True, capture_output=True)

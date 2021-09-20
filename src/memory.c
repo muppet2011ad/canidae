@@ -116,6 +116,10 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_namespace, obj);
             break;
         }
+        case OBJ_EXCEPTION: {
+            FREE(vm, object_exception, obj);
+            break;
+        }
     }
 }
 
@@ -143,6 +147,10 @@ static void mark_roots(VM *vm) {
     mark_object(vm, (object*)vm->div_string);
     mark_object(vm, (object*)vm->pow_string);
     mark_object(vm, (object*)vm->len_string);
+    mark_object(vm, (object*)vm->message_string);
+    mark_object(vm, (object*)vm->type_string);
+
+    mark_object(vm, (object*)vm->exception_stack);
 }
 
 static void mark_array(VM *vm, value_array *arr) {
@@ -202,6 +210,12 @@ static void blacken_object(VM *vm, object *obj) {
             object_namespace *namespace = (object_namespace*) obj;
             mark_object(vm, (object*) namespace->name);
             mark_hashmap(vm, &namespace->values);
+            break;
+        }
+        case OBJ_EXCEPTION: {
+            object_exception *exception = (object_exception*) obj;
+            mark_object(vm, (object*) exception->message);
+            mark_object(vm, (object*) exception->next);
             break;
         }
         case OBJ_NATIVE:

@@ -1,0 +1,14 @@
+try {
+    try {
+        function test() {
+            5 + "Hello";
+        }
+
+        test();
+    } catch then {
+        print "ruh roh";
+    }
+} catch TypeError as e then {
+    print "Wrong";
+}
+

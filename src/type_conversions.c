@@ -34,6 +34,13 @@ value to_str(VM *vm, value arg) {
             snprintf(result, len + 1, "<type %s>", type_strings[arg.as.type]);
             return OBJ_VAL(take_string(vm, result, len));
         }
+        case ERROR_TYPE: {
+            char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+            long len =  snprintf(NULL, 0, "<errortype %s>", error_strings[AS_ERROR_TYPE(arg)]);
+            char *result = ALLOCATE(vm, char, len + 1);
+            snprintf(result, len + 1, "<errortype %s>", error_strings[AS_ERROR_TYPE(arg)]);
+            return OBJ_VAL(take_string(vm, result, len));
+        }
         case OBJ_TYPE: {
             #define FN_TO_STRING(function) \
                 long len = snprintf(NULL, 0, "<function %s>", function->name->chars); \
@@ -103,16 +110,23 @@ value to_str(VM *vm, value arg) {
                     snprintf(result, len + 1, "<namespace %s>", namespace->name->chars);
                     return OBJ_VAL(take_string(vm, result, len));
                 }
+                case OBJ_EXCEPTION: {
+                    char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+                    long len =  snprintf(NULL, 0, "<exception %s '%s'>", error_strings[AS_EXCEPTION(arg)->type], (AS_EXCEPTION(arg))->message->chars);
+                    char *result = ALLOCATE(vm, char, len + 1);
+                    snprintf(result, len + 1, "<exception %s '%s'>", error_strings[AS_EXCEPTION(arg)->type], (AS_EXCEPTION(arg))->message->chars);
+                    return OBJ_VAL(take_string(vm, result, len));
+                }
                 default:
-                    runtime_error(vm, "Unprintable object type (how did you even access this?)");
-                    return NATIVE_ERROR_VAL;
+                    if(!runtime_error(vm, TYPE_ERROR, "Unprintable object type (how did you even access this?)")) return NATIVE_ERROR_VAL;
+                    return HANDLED_NATIVE_ERROR_VAL;
             }
             #undef FN_TO_STRING
             break;
         }
     }
-    runtime_error(vm, "Failed to convert value to string.");
-    return NATIVE_ERROR_VAL;
+    if(!runtime_error(vm, TYPE_ERROR, "Failed to convert value to string.")) return NATIVE_ERROR_VAL;
+    return HANDLED_NATIVE_ERROR_VAL;
 }
 
 value to_num(VM *vm, value arg) {
@@ -130,18 +144,18 @@ value to_num(VM *vm, value arg) {
                         return NUMBER_VAL(conv);
                     }
                     else {
-                        runtime_error(vm, "Could not convert string '%s' to number.");
-                        return NATIVE_ERROR_VAL;
+                        if(!runtime_error(vm, VALUE_ERROR, "Could not convert string '%s' to number.")) return NATIVE_ERROR_VAL;
+                        return HANDLED_NATIVE_ERROR_VAL;
                     }
                 }
                 default: {
-                    runtime_error(vm, "Invalid type for conversion to number.");
-                    return NATIVE_ERROR_VAL;
+                    if(!runtime_error(vm, TYPE_ERROR, "Invalid type for conversion to number.")) return NATIVE_ERROR_VAL;
+                    return HANDLED_NATIVE_ERROR_VAL;
                 }
             }
         default:
-            runtime_error(vm, "Failed to convert value to number.");
-            return NATIVE_ERROR_VAL;
+            if(!runtime_error(vm, TYPE_ERROR, "Failed to convert value to number.")) return NATIVE_ERROR_VAL;
+            return HANDLED_NATIVE_ERROR_VAL;
     }
 }
 

@@ -18,18 +18,19 @@ static void reset_stack(VM *vm) {
     vm->open_upvalues = NULL;
 }
 
-void runtime_error(VM *vm, const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    fputs("\n", stderr);
+void stacktrace(VM *vm) {
+    object_exception *exception = vm->exception_stack;
+    char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+    fprintf(stderr, "[%s] ", error_strings[exception->type]);
+    fprintf(stderr, exception->message->chars);
+    fprintf(stderr, " [line %lu]", exception->line);
+    fputs("\nRaised at:\n", stderr);
 
     for (int32_t i = vm->frame_count - 1; i >= 0; i--) {
         call_frame *frame = &vm->frames[i];
         object_function *function = frame->closure->function;
         size_t instruction = frame->ip - function->seg.bytecode - 1;
-        fprintf(stderr, "[line %u] in ", function->seg.lines[instruction]);
+        fprintf(stderr, "\t[line %u] in ", function->seg.lines[instruction]);
         if (function->name == NULL) {
             fprintf(stderr, "script\n");
         }
@@ -38,7 +39,72 @@ void runtime_error(VM *vm, const char *format, ...) {
         }
     }
 
+    while (exception->next != NULL) {
+        exception = exception->next;
+        fprintf(stderr, "\nError was encountered during the handling of the following error:\n\t[%s] %s [line %lu]\n", error_strings[exception->type], exception->message->chars, exception->line);
+    }
+
     reset_stack(vm);
+}
+
+uint8_t runtime_error(VM *vm, error_type type, const char *format, ...) { // Returns whether or not the exception is handled (1 is handled, 0 is unhandled)
+    va_list args;
+    va_list args_2;
+    va_start(args, format);
+    va_copy(args_2, args);
+    long len = vsnprintf(NULL, 0, format, args);
+    char *error_message = ALLOCATE(vm, char, len + 1);
+    vsnprintf(error_message, len + 1, format, args_2);
+    
+    call_frame *frame = vm->active_frame;
+    object_function *function = frame->closure->function;
+
+    size_t instruction = frame->ip - function->seg.bytecode - 1;
+    object_exception *exception = new_exception(vm, take_string(vm, error_message, len), type, function->seg.lines[instruction]);
+    va_end(args);
+
+    return raise(vm, exception);    
+}
+
+uint8_t raise(VM *vm, object_exception *exception) { // Returns whether or not the exception is handled (1 is handled, 0 is unhandled)
+    if (exception != vm->exception_stack) {
+        exception->next = vm->exception_stack;
+        vm->exception_stack = exception;
+    }
+
+    exception_catch *catcher = vm->catch_stack;
+    while (catcher != NULL) {
+        uint8_t matched = 0;
+        if (catcher->num_errors == 0) break;
+        else {
+            for (uint8_t i = 0; i < catcher->num_errors; i++) {
+                if (AS_ERROR_TYPE(catcher->catching_errors[i]) == exception->type) {
+                    matched = 1;
+                    break;
+                }
+            }
+            if (matched) break;
+        }
+        // If we get to here, this catch statement isn't catching this exception, so we pop it and move onto the next
+        exception_catch *old = catcher;
+        catcher = catcher->next;
+        free(old);
+    }
+
+    if (catcher == NULL) { // Code to check for except statements will go here
+        stacktrace(vm);
+        return 0;
+    }
+    else {
+        vm->frame_count = catcher->frame_at_try;
+        vm->active_frame = &vm->frames[vm->frame_count-1];
+        vm->stack_ptr -= (STACK_LEN(vm) - catcher->stack_size_at_try);
+        vm->active_frame->ip = &vm->active_frame->closure->function->seg.bytecode[catcher->catch_address];
+        push(vm, OBJ_VAL(exception));
+        vm->catch_stack = catcher->next;
+        free(catcher);
+        return 1;
+    }
 }
 
 void define_native(VM *vm, const char *name, native_function function) {
@@ -46,6 +112,10 @@ void define_native(VM *vm, const char *name, native_function function) {
     push(vm, OBJ_VAL(new_native(vm, function)));
     hashmap_set(&vm->globals, vm, AS_STRING(vm->stack[0]), vm->stack[1]);
     popn(vm, 2);
+}
+
+void define_native_global(VM *vm, const char *name, value val) {
+    hashmap_set(&vm->globals, vm, copy_string(vm, name, strlen(name)), val);
 }
 
 void init_VM(VM *vm) {
@@ -68,6 +138,8 @@ void init_VM(VM *vm) {
     init_hashmap(&vm->globals);
     reset_stack(vm);
     define_stdlib(vm);
+    vm->exception_stack = NULL;
+    vm->catch_stack = NULL;
     vm->init_string = NULL;
     vm->str_string = NULL;
     vm->num_string = NULL;
@@ -78,6 +150,8 @@ void init_VM(VM *vm) {
     vm->div_string = NULL;
     vm->pow_string = NULL;
     vm->len_string = NULL;
+    vm->message_string = NULL;
+    vm->type_string = NULL;
     vm->init_string = copy_string(vm, "__init__", 8);
     vm->str_string = copy_string(vm, "__str__", 7);
     vm->num_string = copy_string(vm, "__num__", 7);
@@ -88,6 +162,8 @@ void init_VM(VM *vm) {
     vm->div_string = copy_string(vm, "__div__", 7);
     vm->pow_string = copy_string(vm, "__pow__", 7);
     vm->len_string = copy_string(vm, "__len__", 7);
+    vm->message_string = copy_string(vm, "message", 7);
+    vm->type_string = copy_string(vm, "type", 4);
 }
 
 void destroy_VM(VM *vm) {
@@ -221,7 +297,7 @@ static FILE* resolve_import_path(VM *vm, char *path, char **resolved_path) {
 static char *read_import_file(VM *vm, char *path, char **script_path) {
     FILE *f = resolve_import_path(vm, path, script_path);
     if (f == NULL) {
-        runtime_error(vm, "Could not open file '%s'.", path);
+        runtime_error(vm, IMPORT_ERROR, "Could not open file '%s'.", path);
         return NULL;
     }
     fseek(f, 0L, SEEK_END);
@@ -235,7 +311,7 @@ static char *read_import_file(VM *vm, char *path, char **script_path) {
     }
     size_t bytes_read_actual = fread(buffer, sizeof(char), file_size, f);
     if (bytes_read_actual < file_size) {
-        runtime_error(vm, "Error reading source file on import of '%s'.", path);
+        runtime_error(vm, IMPORT_ERROR, "Error reading source file on import of '%s'.", path);
         return NULL;
     }
     buffer[bytes_read_actual] = '\0';
@@ -283,12 +359,10 @@ static value peek(VM *vm, int distance) {
 
 static uint8_t call(VM *vm, object_closure *closure, uint8_t argc) {
     if (argc != closure->function->arity) {
-        runtime_error(vm, "Function '%s' expects %u arguments (got %u).", closure->function->name->chars, closure->function->arity, argc);
-        return 0;
+        return runtime_error(vm, ARGUMENT_ERROR, "Function '%s' expects %u arguments (got %u).", closure->function->name->chars, closure->function->arity, argc);
     }
     if (vm->frame_count == FRAMES_MAX) {
-        runtime_error(vm, "Exceeded max call depth (%u).", FRAMES_MAX);
-        return 0;
+        return runtime_error(vm, RECURSION_ERROR, "Exceeded max call depth (%u).", FRAMES_MAX);
     }
     call_frame *frame = &vm->frames[vm->frame_count++];
     frame->closure = closure;
@@ -309,10 +383,11 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 disable_gc(vm); // Disables gc during native function in case native function doesn't have gc-safe (i.e. push objects to stack) code
                 value result = native(vm, argc, vm->stack_ptr - argc);
                 enable_gc(vm); // Re-enables afterwards
-                FREE(vm, char, ALLOCATE(vm, char, 1)); // Code triggers gc after function call if we've reached the threshold - the whole block essentially defers gc until after the native function
-                vm->stack_ptr -= argc + 1;
                 if (IS_NATIVE_ERROR(result)) return 0;
+                if (IS_HANDLED_NATIVE_ERROR(result)) return 1;
+                vm->stack_ptr -= argc + 1;
                 push(vm, result);
+                FREE(vm, char, ALLOCATE(vm, char, 1)); // Code triggers gc after function call if we've reached the threshold - the whole block essentially defers gc until after the native function
                 return 1;
             }
             case OBJ_CLASS: {
@@ -322,8 +397,7 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 if(hashmap_get(&class_->methods, vm->init_string, &initialiser)) {
                     return call(vm, AS_CLOSURE(initialiser), argc);
                 } else if (argc != 0) {
-                    runtime_error(vm, "Expected 0 arguments (got %u).", argc);
-                    return 0;
+                    return runtime_error(vm, ARGUMENT_ERROR, "Expected 0 arguments (got %u).", argc);
                 }
                 return 1;
             }
@@ -332,18 +406,18 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 vm->stack_ptr[-argc - 1] = bound->receiver;
                 return call(vm, bound->method, argc);
             }
-            default: runtime_error(vm, "Can only call functions."); return 0;
+            default: {
+                return runtime_error(vm, TYPE_ERROR, "Can only call functions.");
+            }
         }
     }
-    runtime_error(vm, "Can only call functions.");
-    return 0;
+    return runtime_error(vm, TYPE_ERROR, "Can only call functions.");
 }
 
 static uint8_t invoke_from_class(VM *vm, object_class *class_, object_string *name, uint8_t argc) {
     value method;
     if (!hashmap_get(&class_->methods, name, &method)) {
-        runtime_error(vm, "Undefined property '%s'.", name->chars);
-        return 0;
+        return runtime_error(vm, NAME_ERROR, "Undefined property '%s'.", name->chars);
     }
     return call(vm, AS_CLOSURE(method), argc);
 }
@@ -359,14 +433,12 @@ static uint8_t invoke(VM *vm, object_string *name, uint8_t argc) {
             return call_value(vm, v, argc);
         }
         else {
-            runtime_error(vm, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
-            return 0;
+            return runtime_error(vm, NAME_ERROR, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
         }
     }
 
     if (!IS_INSTANCE(receiver)) {
-        runtime_error(vm, "Only instances and namespaces have methods or functions.");
-        return 0;
+        return runtime_error(vm, TYPE_ERROR, "Only instances and namespaces have methods or functions.");
     }
 
     object_instance *instance = AS_INSTANCE(receiver);
@@ -441,7 +513,7 @@ static uint8_t concatenate(VM *vm) {
             object_string *a = AS_STRING(peek(vm, 1));
             size_t len = a->length + b->length;
             if (len < a->length) {
-                runtime_error(vm, "String concatenation results in string larger than max string size.");
+                runtime_error(vm, MEMORY_ERROR, "String concatenation results in string larger than max string size.");
                 return INTERPRET_RUNTIME_ERROR;
             }
             char *chars = ALLOCATE(vm, char, len + 1);
@@ -458,7 +530,7 @@ static uint8_t concatenate(VM *vm) {
             object_array *a = AS_ARRAY(peek(vm, 1));
             size_t len = a->arr.len + b->arr.len;
             if (len < a->arr.len) {
-                runtime_error(vm, "Array concatenation results in array larger than max array size.");
+                runtime_error(vm, MEMORY_ERROR, "Array concatenation results in array larger than max array size.");
                 return INTERPRET_RUNTIME_ERROR;
             }
             value *values = calloc(len, sizeof(value));
@@ -492,6 +564,7 @@ static uint8_t convert_type(VM *vm, value converter(VM*, value), object_string *
         push(vm, converted);
         return 1;
     }
+    return 0;
 }
 
 static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
@@ -500,22 +573,18 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
             value index = peek(vm, 0);
             object_array *array = AS_ARRAY(peek(vm, 1));
             if (!IS_NUMBER(index)) {
-                runtime_error(vm, "Expected number as array index.");
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, TYPE_ERROR, "Expected number as array index.");
             }
             if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
             if (AS_NUMBER(index) < 0) {
-                runtime_error(vm, "Index is less than min index of array (-%lu).", array->arr.len);
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, INDEX_ERROR, "Index is less than min index of array (-%lu).", array->arr.len);
             }
             if (AS_NUMBER(index) > SIZE_MAX) {
-                runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, INDEX_ERROR, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
             }
             size_t index_int = (size_t) AS_NUMBER(index);
             if (index_int >= array->arr.len) {
-                runtime_error(vm, "Array index %lu exceeds max index of array (%lu).", index_int, array->arr.len-1);
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, INDEX_ERROR, "Array index %lu exceeds max index of array (%lu).", index_int, array->arr.len-1);
             }
             value at_index = array->arr.values[index_int];
             if(!keep_ref) popn(vm, 2);
@@ -526,22 +595,18 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
             value index = peek(vm, 0);
             object_string *string = AS_STRING(peek(vm, 1));
             if (!IS_NUMBER(index)) {
-                runtime_error(vm, "Expected number as array index.");
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, TYPE_ERROR, "Expected number as array index.");
             }
             if (AS_NUMBER(index) < 0) index.as.number += string->length;
             if (AS_NUMBER(index) < 0) {
-                runtime_error(vm, "Index is less than min index of string (-%lu).", string->length);
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, INDEX_ERROR, "Index is less than min index of string (-%lu).", string->length);
             }
             if (AS_NUMBER(index) > SIZE_MAX) {
-                runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, INDEX_ERROR, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
             }
             size_t index_int = (size_t) AS_NUMBER(index);
             if (index_int >= string->length) {
-                runtime_error(vm, "Index %lu exceeds max index of string (%lu).", index_int, string->length-1);
-                return INTERPRET_RUNTIME_ERROR;
+                return runtime_error(vm, INDEX_ERROR, "Index %lu exceeds max index of string (%lu).", index_int, string->length-1);
             }
             object_string *result = copy_string(vm, &string->chars[index_int], 1);
             popn(vm, 2);
@@ -549,21 +614,21 @@ static uint8_t vm_array_get(VM *vm, uint8_t keep_ref) {
             break;
         }
         default: {
-            runtime_error(vm, "Attempt to index value that is not a string or an array.");
-            return INTERPRET_RUNTIME_ERROR;
+            return runtime_error(vm, TYPE_ERROR, "Attempt to index value that is not a string or an array.");
         }
     }
-    return INTERPRET_OK;
+    return 1;
 }
 
 static interpret_result run(VM *vm) {
-    call_frame *frame = &vm->frames[vm->frame_count - 1];
-    #define READ_BYTE() (*frame->ip++)
-    #define READ_CONSTANT() (frame->closure->function->seg.constants.values[READ_BYTE()])    
+    vm->active_frame = &vm->frames[vm->frame_count - 1];
+    #define READ_BYTE() (*vm->active_frame->ip++)
+    #define READ_CONSTANT() (vm->active_frame->closure->function->seg.constants.values[READ_BYTE()])    
     #define READ_UINT24() ((uint32_t) READ_BYTE() << 16) + ((uint32_t) READ_BYTE() << 8) + ((uint32_t) READ_BYTE())
     #define READ_UINT40() ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
+    #define READ_UINT48() ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
     #define READ_UINT56() ((uint64_t) READ_BYTE() << 48) + ((uint64_t) READ_BYTE() << 40) + ((uint64_t) READ_BYTE() << 32) + ((uint64_t) READ_BYTE() << 24) + ((uint64_t) READ_BYTE() << 16) + ((uint64_t) READ_BYTE() << 8) + ((uint64_t) READ_BYTE())
-    #define READ_CONSTANT_LONG() (frame->closure->function->seg.constants.values[READ_UINT24()])
+    #define READ_CONSTANT_LONG() (vm->active_frame->closure->function->seg.constants.values[READ_UINT24()])
     #define READ_STRING(constant) AS_STRING(constant)
     #define BINARY_OP(type, op, override) \
         do { \
@@ -574,12 +639,11 @@ static interpret_result run(VM *vm) {
                     value v; \
                     if (hashmap_get(&instance->class_->methods, override, &v)) { \
                         overriden = call(vm, AS_CLOSURE(v), 1); \
-                        frame = &vm->frames[vm->frame_count-1]; \
+                        vm->active_frame = &vm->frames[vm->frame_count-1]; \
                     } \
                 } \
                 if (!overriden) { \
-                    runtime_error(vm, "Unsupported operands for binary operation."); \
-                    return INTERPRET_RUNTIME_ERROR; \
+                    if(!runtime_error(vm, TYPE_ERROR, "Unsupported operands for binary operation.")) return INTERPRET_RUNTIME_ERROR; \
                 } \
             } \
             else { \
@@ -600,15 +664,15 @@ static interpret_result run(VM *vm) {
             value b = peek(vm, 0); \
             value a = peek(vm, 1); \
             if (a.type != b.type) { \
-                runtime_error(vm, "Cannot perform comparison on values of different type."); \
-                return INTERPRET_RUNTIME_ERROR; \
+                if (!runtime_error(vm, TYPE_ERROR, "Cannot perform comparison on values of different type.")) return INTERPRET_RUNTIME_ERROR; \
+                continue; \
             } \
             switch (a.type) { \
                 case NUM_TYPE: BINARY_OP(t, op, NULL); break; \
                 case OBJ_TYPE: { \
                     if (GET_OBJ_TYPE(a) != GET_OBJ_TYPE(b)) { \
-                        runtime_error(vm, "Cannot perform comparison on objects of different type."); \
-                        return INTERPRET_RUNTIME_ERROR; \
+                        if(!runtime_error(vm, TYPE_ERROR, "Cannot perform comparison on objects of different type.")) return INTERPRET_RUNTIME_ERROR; \
+                        continue; \
                     } \
                     switch (GET_OBJ_TYPE(a)) { \
                         case OBJ_STRING: { \
@@ -617,15 +681,15 @@ static interpret_result run(VM *vm) {
                             break; \
                         } \
                         default: { \
-                            runtime_error(vm, "Unsupported type for comparison operator"); \
-                            return INTERPRET_RUNTIME_ERROR; \
+                            if(!runtime_error(vm, TYPE_ERROR, "Unsupported type for comparison operator")) return INTERPRET_RUNTIME_ERROR; \
+                            continue; \
                         } \
                     } \
                     break; \
                 } \
                 default: { \
-                    runtime_error(vm, "Unsupported type for comparison operator"); \
-                    return INTERPRET_RUNTIME_ERROR; \
+                    if(!runtime_error(vm, TYPE_ERROR, "Unsupported type for comparison operator")) return INTERPRET_RUNTIME_ERROR; \
+                    continue; \
                 } \
             } \
         } while (0)
@@ -640,26 +704,26 @@ static interpret_result run(VM *vm) {
                 printf("]");
             }
             printf("\n");
-            dissassemble_instruction(&frame->closure->function->seg, (size_t) (frame->ip - frame->closure->function->seg.bytecode));
+            dissassemble_instruction(&vm->active_frame->closure->function->seg, (size_t) (vm->active_frame->ip - vm->active_frame->closure->function->seg.bytecode));
         #endif
         switch (instruction = READ_BYTE()) {
             case OP_RETURN:{
                 value result = pop(vm);
-                close_upvalues(vm, frame->slots);
+                close_upvalues(vm, vm->active_frame->slots);
                 vm->frame_count--;
                 if (vm->frame_count == 0) {
                     pop(vm);
                     return INTERPRET_OK;
                 }
-                vm->stack_ptr = frame->slots;
+                vm->stack_ptr = vm->active_frame->slots;
                 push(vm, result);
-                frame = &vm->frames[vm->frame_count - 1];
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_NEGATE:
                 if (!IS_NUMBER(peek(vm, 0))) {
-                    runtime_error(vm, "Operand must be a number.");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Operand must be a number.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 (vm->stack_ptr-1)->as.number = -(vm->stack_ptr-1)->as.number;
                 break;
@@ -683,12 +747,12 @@ static interpret_result run(VM *vm) {
                         value v;
                         if (hashmap_get(&instance->class_->methods, vm->pow_string, &v)) {
                             overriden = call(vm, AS_CLOSURE(v), 1);
-                            frame = &vm->frames[vm->frame_count-1];
+                            vm->active_frame = &vm->frames[vm->frame_count-1];
                         }
                     }
                     if (!overriden) {
-                        runtime_error(vm, "Unsupported operands for binary operation.");
-                        return INTERPRET_RUNTIME_ERROR;
+                        if(!runtime_error(vm, TYPE_ERROR, "Unsupported operands for binary operation.")) return INTERPRET_RUNTIME_ERROR;
+                        continue;
                     }
                 }
                 else {
@@ -720,13 +784,13 @@ static interpret_result run(VM *vm) {
             }
             case OP_POP: pop(vm); break;
             case OP_ARRAY_GET: {
-                if(vm_array_get(vm, 0) == INTERPRET_RUNTIME_ERROR) {
+                if(!vm_array_get(vm, 0)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
             }
             case OP_ARRAY_GET_KEEP_REF: {
-                if(vm_array_get(vm, 1) == INTERPRET_RUNTIME_ERROR) {
+                if(!vm_array_get(vm, 1)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
                 break;
@@ -735,22 +799,22 @@ static interpret_result run(VM *vm) {
                 value new_value = peek(vm, 0);
                 value index = peek(vm, 1);
                 if (!IS_ARRAY(peek(vm, 2))) {
-                    runtime_error(vm, "Attempt to set at index of non-array value.");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Attempt to set at index of non-array value.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 object_array *array = AS_ARRAY(peek(vm, 2));
                 if (!IS_NUMBER(index)) {
-                    runtime_error(vm, "Expected number as array index.");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Expected number as array index.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 if (AS_NUMBER(index) > SIZE_MAX) {
-                    runtime_error(vm, "Index exceeds maximum possible index value (%lu).", SIZE_MAX);
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, INDEX_ERROR, "Index exceeds maximum possible index value (%lu).", SIZE_MAX)) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 if (AS_NUMBER(index) < 0) index.as.number += array->arr.len;
                 if (AS_NUMBER(index) < 0) {
-                    runtime_error(vm, "Index is less than min index of string (-%lu).", array->arr.len);
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, INDEX_ERROR, "Index is less than min index of string (-%lu).", array->arr.len)) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 size_t index_int = (size_t) AS_NUMBER(index);
                 array_set(vm, array, index_int, new_value);
@@ -786,8 +850,8 @@ static interpret_result run(VM *vm) {
                 value superclass = peek(vm, 1);
                 object_class *subclass = AS_CLASS(peek(vm, 0));
                 if (!IS_CLASS(superclass)) {
-                    runtime_error(vm, "Can only inherit from class.");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Can only inherit from class.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 hashmap_copy_all(vm, &AS_CLASS(superclass)->methods, &subclass->methods);
                 pop(vm); // Pops subclass
@@ -817,14 +881,14 @@ static interpret_result run(VM *vm) {
                                 break;
                             }
                             default:
-                                runtime_error(vm, "Unsupported type for 'typeof'.");
-                                return INTERPRET_RUNTIME_ERROR;
+                                if(!runtime_error(vm, TYPE_ERROR, "Unsupported type for 'typeof'.")) return INTERPRET_RUNTIME_ERROR;
+                                continue;
                         }
                         break;
                     }
                     default:
-                        runtime_error(vm, "Unsupported type for 'typeof'.");
-                        return INTERPRET_RUNTIME_ERROR;
+                        if(!runtime_error(vm, TYPE_ERROR, "Unsupported type for 'typeof'.")) return INTERPRET_RUNTIME_ERROR;
+                        continue;
                 }
                 break;
             }
@@ -852,16 +916,38 @@ static interpret_result run(VM *vm) {
                             value v;
                             if (hashmap_get(&instance->class_->methods, vm->len_string, &v)) {
                                 result = call(vm, AS_CLOSURE(v), 0);
-                                frame = &vm->frames[vm->frame_count-1];
+                                vm->active_frame = &vm->frames[vm->frame_count-1];
                             }
                         }
                         default: break;
                     }
                 }
                 if (!result) {
-                    runtime_error(vm, "Unsupported type for 'len' operator.");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Unsupported type for 'len' operator.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
+                break;
+            }
+            case OP_UNREGISTER_CATCH: {
+                exception_catch *old = vm->catch_stack;
+                if (old) {
+                    vm->catch_stack = old->next;
+                    free(old);
+                }
+                break;
+            }
+            case OP_MARK_ERRORS_HANDLED: {
+                vm->exception_stack = NULL;
+                break;
+            }
+            case OP_RAISE: {
+                value val = pop(vm);
+                if (!IS_EXCEPTION(val)) {
+                    if (!runtime_error(vm, TYPE_ERROR, "Can only raise exceptions.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
+                }
+                object_exception *exception = AS_EXCEPTION(val);
+                if(!raise(vm, exception)) return INTERPRET_RUNTIME_ERROR;
                 break;
             }
             case OP_IMPORT: {
@@ -887,7 +973,7 @@ static interpret_result run(VM *vm) {
                 if (!call_value(vm, peek(vm, argc), argc)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count - 1];
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_PUSH_TYPEOF: {
@@ -898,6 +984,7 @@ static interpret_result run(VM *vm) {
             case OP_CONV_TYPE: {
                 uint8_t arg = READ_BYTE();
                 uint8_t result = 0;
+                disable_gc(vm);
                 switch (arg) {
                     case TYPEOF_NUM: {
                         result = convert_type(vm, to_num, vm->num_string);
@@ -913,8 +1000,9 @@ static interpret_result run(VM *vm) {
                     }
                     default: break; // Should be unreachable
                 }
+                enable_gc(vm);
                 if (!result) return INTERPRET_RUNTIME_ERROR;
-                frame = &vm->frames[vm->frame_count-1];
+                vm->active_frame = &vm->frames[vm->frame_count-1];
                 break;
             }
             case OP_DEFINE_GLOBAL: {
@@ -927,8 +1015,8 @@ static interpret_result run(VM *vm) {
                 object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 value val;
                 if (!hashmap_get(&vm->globals, name, &val)) {
-                    runtime_error(vm, "Undefined variable '%s'.", name->chars);
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, NAME_ERROR, "Undefined variable '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 push(vm, val);
                 break;
@@ -937,45 +1025,45 @@ static interpret_result run(VM *vm) {
                 object_string *name = READ_STRING(READ_VARIABLE_CONST());
                 if(hashmap_set(&vm->globals, vm, name, peek(vm, 0))) {
                     hashmap_delete(&vm->globals, name);
-                    runtime_error(vm, "Undefined variable '%s'.", name->chars);
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, NAME_ERROR, "Undefined variable '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 break;
             }
             case OP_GET_LOCAL: {
-                push(vm, frame->slots[READ_VARIABLE_ARG()]);
+                push(vm, vm->active_frame->slots[READ_VARIABLE_ARG()]);
                 break;
             }
             case OP_SET_LOCAL: {
-                frame->slots[READ_VARIABLE_ARG()] = peek(vm, 0);
+                vm->active_frame->slots[READ_VARIABLE_ARG()] = peek(vm, 0);
                 break;
             }
             case OP_GET_UPVALUE: {
-                push(vm, *frame->closure->upvalues[READ_VARIABLE_ARG()]->location);
+                push(vm, *vm->active_frame->closure->upvalues[READ_VARIABLE_ARG()]->location);
                 break;
             }
             case OP_SET_UPVALUE: {
-                *frame->closure->upvalues[READ_VARIABLE_ARG()]->location = peek(vm, 0);
+                *vm->active_frame->closure->upvalues[READ_VARIABLE_ARG()]->location = peek(vm, 0);
                 break;
             }
             case OP_JUMP_IF_FALSE: {
                 uint64_t offset = READ_UINT40();
-                if (is_falsey(peek(vm, 0))) frame->ip += offset;
+                if (is_falsey(peek(vm, 0))) vm->active_frame->ip += offset;
                 break;
             }
             case OP_JUMP_IF_TRUE: {
                 uint64_t offset = READ_UINT40();
-                if (!is_falsey(peek(vm, 0))) frame->ip += offset;
+                if (!is_falsey(peek(vm, 0))) vm->active_frame->ip += offset;
                 break;
             }
             case OP_JUMP: {
                 uint64_t offset = READ_UINT40();
-                frame->ip += offset;
+                vm->active_frame->ip += offset;
                 break;
             }
             case OP_LOOP: {
                 uint64_t offset = READ_UINT40();
-                frame->ip -= offset;
+                vm->active_frame->ip -= offset;
                 break;
             }
             case OP_CLOSURE: {
@@ -986,10 +1074,10 @@ static interpret_result run(VM *vm) {
                     uint8_t is_local = READ_BYTE();
                     uint32_t index = READ_UINT24();
                     if (is_local) {
-                        closure->upvalues[i] = capture_upvalue(vm, frame->slots + index);
+                        closure->upvalues[i] = capture_upvalue(vm, vm->active_frame->slots + index);
                     }
                     else {
-                        closure->upvalues[i] = frame->closure->upvalues[index];
+                        closure->upvalues[i] = vm->active_frame->closure->upvalues[index];
                     }
                 }
                 break;
@@ -1000,9 +1088,9 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_PROPERTY: {
                 value obj = peek(vm, 0);
-                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
-                    runtime_error(vm, "Only instances and namespaces have properties.");
-                    return INTERPRET_RUNTIME_ERROR;
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj) || IS_EXCEPTION(obj))) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances, namespaces and exceptions have properties.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 if (IS_INSTANCE(obj)) {
                     object_instance *instance = AS_INSTANCE(peek(vm, 0));
@@ -1029,8 +1117,24 @@ static interpret_result run(VM *vm) {
                         break;
                     }
                     else {
-                        runtime_error(vm, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
-                        return INTERPRET_RUNTIME_ERROR;
+                        if(!runtime_error(vm, NAME_ERROR, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
+                    }
+                }
+                else if (IS_EXCEPTION(obj)) {
+                    object_exception *exception = AS_EXCEPTION(obj);
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    if (name == vm->message_string) {
+                        pop(vm);
+                        push(vm, OBJ_VAL(exception->message));
+                    }
+                    else if (name == vm->type_string) {
+                        pop(vm);
+                        push(vm, ERROR_TYPE_VAL(exception->type));
+                    }
+                    else {
+                        if (!runtime_error(vm, NAME_ERROR, "Exceptions do not have property '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
                     }
                 }
 
@@ -1038,9 +1142,9 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_PROPERTY_KEEP_REF: {
                 value obj = peek(vm, 0);
-                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
-                    runtime_error(vm, "Only instances and namespaces have properties.");
-                    return INTERPRET_RUNTIME_ERROR;
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj) || IS_EXCEPTION(obj))) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances, namespaces and exceptions have properties.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 if (IS_INSTANCE(obj)) {
                     object_instance *instance = AS_INSTANCE(peek(vm, 0));
@@ -1065,8 +1169,22 @@ static interpret_result run(VM *vm) {
                         break;
                     }
                     else {
-                        runtime_error(vm, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
-                        return INTERPRET_RUNTIME_ERROR;
+                        if(!runtime_error(vm, NAME_ERROR, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
+                    }
+                }
+                else if (IS_EXCEPTION(obj)) {
+                    object_exception *exception = AS_EXCEPTION(obj);
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    if (name == vm->message_string) {
+                        push(vm, OBJ_VAL(exception->message));
+                    }
+                    else if (name == vm->type_string) {
+                        push(vm, ERROR_TYPE_VAL(exception->type));
+                    }
+                    else {
+                        if (!runtime_error(vm, NAME_ERROR, "Exceptions do not have property '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
                     }
                 }
 
@@ -1074,9 +1192,13 @@ static interpret_result run(VM *vm) {
             }
             case OP_SET_PROPERTY: {
                 value obj = peek(vm, 1);
+                if (IS_EXCEPTION(obj)) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Properties of exceptions cannot be set.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
+                }
                 if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj))) {
-                    runtime_error(vm, "Only instances and namespaces have fields");
-                    return INTERPRET_RUNTIME_ERROR;
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances and namespaces have fields.")) return INTERPRET_RUNTIME_ERROR;
+                    continue;
                 }
                 hashmap *h; // Instance fields or namespace values goes here
                 if (IS_INSTANCE(obj)) h = &AS_INSTANCE(obj)->fields;
@@ -1097,7 +1219,7 @@ static interpret_result run(VM *vm) {
                 if (!invoke(vm, method, argc)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count - 1];
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
             case OP_GET_SUPER: {
@@ -1115,7 +1237,30 @@ static interpret_result run(VM *vm) {
                 if (!invoke_from_class(vm, superclass, method, argc)) {
                     return INTERPRET_RUNTIME_ERROR;
                 }
-                frame = &vm->frames[vm->frame_count-1];
+                vm->active_frame = &vm->frames[vm->frame_count-1];
+                break;
+            }
+            case OP_REGISTER_CATCH: {
+                uint8_t had_error = 0;
+                uint8_t num_errors = READ_BYTE();
+                size_t catch_addr = READ_UINT48();
+                exception_catch *catcher = ALLOCATE(vm, exception_catch, 1);
+                for (uint8_t i = 0; i < num_errors; i++) {
+                    value val = pop(vm);
+                    if (!IS_ERROR_TYPE(val)) {
+                        if (!runtime_error(vm, TYPE_ERROR, "Expected an error type in catch statement.")) return INTERPRET_RUNTIME_ERROR;
+                        had_error = 1;
+                        break;
+                    }
+                    else catcher->catching_errors[i] = val;
+                }
+                if (had_error) continue;
+                catcher->catch_address = catch_addr;
+                catcher->frame_at_try = vm->frame_count;
+                catcher->num_errors = num_errors;
+                catcher->stack_size_at_try = STACK_LEN(vm);
+                catcher->next = vm->catch_stack;
+                vm->catch_stack = catcher;
                 break;
             }
         }
@@ -1126,6 +1271,7 @@ static interpret_result run(VM *vm) {
     #undef READ_CONSTANT_LONG
     #undef READ_UINT24
     #undef READ_UINT40
+    #undef READ_UINT48
     #undef READ_UINT56
     #undef READ_STRING
     #undef BINARY_COMPARISON

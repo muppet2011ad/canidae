@@ -49,6 +49,6 @@ def test_binop_type_checking():
     completed = subprocess.run(["bin/canidae",  "test/basic/binop_type_checking.can"], text=True, capture_output=True)
     assert completed.returncode == 70
     lines = completed.stderr.split("\n")
-    assert len(lines) == 3
-    assert lines[0].startswith("Unsupported operands for binary operation")
-    assert lines[1].startswith("[line 1]")
+    assert len(lines) == 4
+    assert "Unsupported operands for binary operation" in lines[0]
+    assert lines[2].startswith("\t[line 1]")

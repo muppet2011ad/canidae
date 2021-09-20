@@ -41,7 +41,12 @@ void print_value(value val) {
         case UNDEFINED_TYPE:
             printf("undefined"); break;
         case TYPE_TYPE: {
-            printf("<type %s>", type_strings[val.as.type]); break;
+            printf("<type %s>", type_strings[AS_TYPE(val)]); break;
+        }
+        case ERROR_TYPE: {
+            char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
+            printf("<errortype %s>", error_strings[AS_ERROR_TYPE(val)]);
+            break;
         }
         case OBJ_TYPE: print_object(val); break;
     }
@@ -53,6 +58,8 @@ uint8_t value_equality(value a, value b) {
         case BOOL_TYPE: return AS_BOOL(a) == AS_BOOL(b);
         case NULL_TYPE: case UNDEFINED_TYPE: return 1;
         case NUM_TYPE: return AS_NUMBER(a) == AS_NUMBER(b);
+        case TYPE_TYPE: return AS_TYPE(a) == AS_TYPE(b);
+        case ERROR_TYPE: return AS_ERROR_TYPE(a) == AS_ERROR_TYPE(b);
         case OBJ_TYPE: {
             if (GET_OBJ_TYPE(a) == GET_OBJ_TYPE(b)) {
                 switch (GET_OBJ_TYPE(a)) {

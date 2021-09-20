@@ -6,6 +6,7 @@
 
 #define UINT24_MAX 16777215
 #define UINT40_MAX 1099511627775
+#define UINT48_MAX 281474976710655
 #define UINT56_MAX 72057594037927935
 
 #define JUMP_OFFSET_LEN 5
@@ -40,6 +41,9 @@ typedef enum {
     OP_INHERIT,
     OP_TYPEOF,
     OP_LEN,
+    OP_UNREGISTER_CATCH,
+    OP_MARK_ERRORS_HANDLED,
+    OP_RAISE,
     // One-byte operand
     OP_POPN,
     OP_CALL,
@@ -71,6 +75,8 @@ typedef enum {
     OP_GET_SUPER,
     OP_INVOKE_SUPER, // Variable length with an extra byte for the number of arguments
     OP_IMPORT,
+    // One-byte operand followed by 6 byte jump address
+    OP_REGISTER_CATCH,
 } opcode;
 
 typedef struct {
