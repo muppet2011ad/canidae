@@ -86,7 +86,9 @@ object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source) {
 }
 
 object_exception *new_exception(VM *vm, object_string *message, error_type type, size_t line) {
+    push(vm, OBJ_VAL(message));
     object_exception *exception = ALLOCATE_OBJ(vm, object_exception, OBJ_EXCEPTION);
+    pop(vm);
     exception->message = message;
     exception->type = type;
     exception->next = NULL;

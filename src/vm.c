@@ -60,9 +60,7 @@ uint8_t runtime_error(VM *vm, error_type type, const char *format, ...) { // Ret
     object_function *function = frame->closure->function;
 
     size_t instruction = frame->ip - function->seg.bytecode - 1;
-    disable_gc(vm);
     object_exception *exception = new_exception(vm, take_string(vm, error_message, len), type, function->seg.lines[instruction]);
-    enable_gc(vm);
     va_end(args);
 
     return raise(vm, exception);    
