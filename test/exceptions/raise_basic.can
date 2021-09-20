@@ -1,0 +1,2 @@
+let x = exception(NameError, "Exceptional as ever.");
+raise x;

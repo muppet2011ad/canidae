@@ -1,0 +1,9 @@
+try {
+    try {
+        5 + "Hello";
+    } catch then {
+        print "Inner";
+    }
+} catch then {
+    print "Outer";
+}

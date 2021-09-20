@@ -1,0 +1,11 @@
+try {
+    try {
+        5 + "Hello";
+    } catch TypeError as e then {
+        print "ruh roh";
+        raise e;
+    }
+} catch TypeError as e then {
+    print e;
+}
+

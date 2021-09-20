@@ -1,0 +1,10 @@
+try {
+    try {
+        print 5 + "Hello";
+    } catch TypeError then {
+        print "Caught error 1";
+        5 + "Hello";
+    }
+} catch NameError then {
+    print "Caught error 2"; // Shouldn't be caught
+}

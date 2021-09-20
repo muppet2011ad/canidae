@@ -1,0 +1,3 @@
+let x = exception(TypeError, "new exception");
+print x.type;
+print x.message;
