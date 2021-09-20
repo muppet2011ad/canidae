@@ -112,9 +112,9 @@ value to_str(VM *vm, value arg) {
                 }
                 case OBJ_EXCEPTION: {
                     char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
-                    long len =  snprintf(NULL, 0, "<exception %s>", error_strings[AS_EXCEPTION(arg)->type]);
+                    long len =  snprintf(NULL, 0, "<exception %s '%s'>", error_strings[AS_EXCEPTION(arg)->type], (AS_EXCEPTION(arg))->message->chars);
                     char *result = ALLOCATE(vm, char, len + 1);
-                    snprintf(result, len + 1, "<exception %s>", error_strings[AS_EXCEPTION(arg)->type]);
+                    snprintf(result, len + 1, "<exception %s '%s'>", error_strings[AS_EXCEPTION(arg)->type], (AS_EXCEPTION(arg))->message->chars);
                     return OBJ_VAL(take_string(vm, result, len));
                 }
                 default:
