@@ -33,7 +33,7 @@ $(BUILD_FOLDER)/%.o: src/%.c src/common.h src/segment.h src/%.h $(BUILD_FOLDER)/
 	gcc $(OPTS) $(LIBS) -c $< -O3 -fpic -o $@
 
 $(BUILD_FOLDER)/canidae_debug: $(DEBUG_DEPS) $(BUILD_FOLDER)/.sentinel
-	gcc $(OPTS) $(DEBUG_OPTS) $(LIBS) -g  -lm $(DEBUG_DEPS) -o $(BUILD_FOLDER)/canidae_debug
+	gcc $(OPTS) $(DEBUG_OPTS) $(LIBS) -g $(DEBUG_DEPS) -o $(BUILD_FOLDER)/canidae_debug -lm
 
 $(BUILD_FOLDER)/canidae: $(MAIN_DEPS) $(BUILD_FOLDER)/.sentinel
 	gcc $(OPTS) -O3  $(MAIN_DEPS) $(LIBS) -o $(BUILD_FOLDER)/canidae
