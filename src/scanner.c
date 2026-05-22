@@ -297,8 +297,10 @@ token scan_token(scanner *s) {
             return make_token(s, match(s, '=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
         case '*': 
             return make_token(s, match(s, '=') ? TOKEN_STAR_EQUAL : TOKEN_STAR);
-        case '^': 
+        case '^':
             return make_token(s, match(s, '=') ? TOKEN_CARET_EQUAL : TOKEN_CARET);
+        case '%':
+            return make_token(s, match(s, '=') ? TOKEN_PERCENT_EQUAL : TOKEN_PERCENT);
         case '!':
             return make_token(s, match(s, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '=':

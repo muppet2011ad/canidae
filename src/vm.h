@@ -44,6 +44,7 @@ typedef struct VM {
     object_string *mult_string;
     object_string *div_string;
     object_string *pow_string;
+    object_string *mod_string;
     object_string *len_string;
     object_string *message_string;
     object_string *type_string;

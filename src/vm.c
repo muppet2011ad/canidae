@@ -149,6 +149,7 @@ void init_VM(VM *vm) {
     vm->mult_string = NULL;
     vm->div_string = NULL;
     vm->pow_string = NULL;
+    vm->mod_string = NULL;
     vm->len_string = NULL;
     vm->message_string = NULL;
     vm->type_string = NULL;
@@ -161,6 +162,7 @@ void init_VM(VM *vm) {
     vm->mult_string = copy_string(vm, "__mul__", 7);
     vm->div_string = copy_string(vm, "__div__", 7);
     vm->pow_string = copy_string(vm, "__pow__", 7);
+    vm->mod_string = copy_string(vm, "__mod__", 7);
     vm->len_string = copy_string(vm, "__len__", 7);
     vm->message_string = copy_string(vm, "message", 7);
     vm->type_string = copy_string(vm, "type", 4);
@@ -759,6 +761,29 @@ static interpret_result run(VM *vm) {
                     double b = AS_NUMBER(pop(vm));
                     double a = AS_NUMBER(pop(vm));
                     push(vm, NUMBER_VAL(pow(a, b)));
+                }
+                break;
+            }
+            case OP_MODULO: {
+                if (!IS_NUMBER(peek(vm, 0)) || !IS_NUMBER(peek(vm, 1))) {
+                    uint8_t overriden = 0;
+                    if (IS_INSTANCE(peek(vm, 1))) {
+                        object_instance *instance = AS_INSTANCE(peek(vm, 1));
+                        value v;
+                        if (hashmap_get(&instance->class_->methods, vm->mod_string, &v)) {
+                            overriden = call(vm, AS_CLOSURE(v), 1);
+                            vm->active_frame = &vm->frames[vm->frame_count-1];
+                        }
+                    }
+                    if (!overriden) {
+                        if(!runtime_error(vm, TYPE_ERROR, "Unsupported operands for binary operation.")) return INTERPRET_RUNTIME_ERROR;
+                        continue;
+                    }
+                }
+                else {
+                    double b = AS_NUMBER(pop(vm));
+                    double a = AS_NUMBER(pop(vm));
+                    push(vm, NUMBER_VAL(fmod(a, b)));
                 }
                 break;
             }

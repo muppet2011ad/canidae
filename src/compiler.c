@@ -392,6 +392,7 @@ static void binary(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
         case TOKEN_STAR: emit_byte(p, c, OP_MULTIPLY); break;
         case TOKEN_SLASH: emit_byte(p, c, OP_DIVIDE); break;
         case TOKEN_CARET: emit_byte(p, c, OP_POWER); break;
+        case TOKEN_PERCENT: emit_byte(p, c, OP_MODULO); break;
         case TOKEN_BANG_EQUAL: emit_2_bytes(p, c, OP_EQUAL, OP_NOT); break;
         case TOKEN_EQUAL_EQUAL: emit_byte(p, c, OP_EQUAL); break;
         case TOKEN_GREATER: emit_byte(p, c, OP_GREATER); break;
@@ -561,6 +562,10 @@ static uint8_t handle_assignment(parser *p, compiler *c, VM *vm, uint8_t var_or_
     }
     else if (match(p, TOKEN_CARET_EQUAL)) {
         assign_with_op(p, c, vm, var_or_arr, arg, get_op, set_op, OP_POWER, 1);
+        return 1;
+    }
+    else if (match(p, TOKEN_PERCENT_EQUAL)) {
+        assign_with_op(p, c, vm, var_or_arr, arg, get_op, set_op, OP_MODULO, 1);
         return 1;
     }
     else if (match(p, TOKEN_PLUS_PLUS)) {
@@ -1176,6 +1181,7 @@ parse_rule rules[] = {
     [TOKEN_SEMICOLON] = {NULL, NULL, PREC_NONE},
     [TOKEN_STAR] = {NULL, binary, PREC_FACTOR},
     [TOKEN_SLASH] = {NULL, binary, PREC_FACTOR},
+    [TOKEN_PERCENT] = {NULL, binary, PREC_FACTOR},
     [TOKEN_CARET] = {NULL, binary, PREC_POWER},
     [TOKEN_BANG] = {unary, NULL, PREC_NONE},
     [TOKEN_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},

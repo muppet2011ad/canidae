@@ -23,15 +23,33 @@ def test_basic_arithmetic():
     completed = subprocess.run(["bin/canidae",  "test/basic/basic_arithmetic.can"], text=True, capture_output=True)
     assert completed.returncode == 0
     lines = completed.stdout.split("\n")
-    assert len(lines) == 8
+    assert len(lines) == 10
     assert lines[0] == "2"
     assert lines[1] == "3"
     assert lines[2] == "18"
     assert lines[3] == "4"
     assert lines[4] == "3125"
-    assert lines[5] == "-4"
-    assert lines[6][:5] == "3.833"
-    assert lines[7] == ""
+    assert lines[5] == "1"
+    assert lines[6] == "0"
+    assert lines[7] == "-4"
+    assert lines[8][:5] == "3.833"
+    assert lines[9] == ""
+
+def test_modulo_assignment():
+    completed = subprocess.run(["bin/canidae", "test/basic/modulo_assignment.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "2"
+    assert lines[1] == ""
+
+def test_modulo_type_checking():
+    completed = subprocess.run(["bin/canidae", "test/basic/modulo_type_checking.can"], text=True, capture_output=True)
+    assert completed.returncode == 70
+    lines = completed.stderr.split("\n")
+    assert len(lines) == 4
+    assert "Unsupported operands for binary operation" in lines[0]
+    assert lines[2].startswith("\t[line 1]")
 
 def test_more_complicated_expressions():
     completed = subprocess.run(["bin/canidae",  "test/basic/more_complicated_expressions.can"], text=True, capture_output=True)
