@@ -252,9 +252,14 @@ static token identifier(scanner *s) {
 }
 
 static token string(scanner *s) {
-    while (peek(s) != '"' && !is_at_end(s)) {
+    while (!is_at_end(s) && peek(s) != '"') {
         if (peek(s) == '\n') s->line++;
-        advance(s);
+        if (peek(s) == '\\') {
+            advance(s);
+            if (!is_at_end(s)) advance(s);
+        } else {
+            advance(s);
+        }
     }
     if (is_at_end(s)) {
         return error_token(s, "Unterminated string.");

@@ -81,6 +81,52 @@ def test_string_concat_wrong_type():
     assert lines[2].startswith("\t[line 2]")
     assert lines[3] == ""
 
+def test_escape_newline():
+    completed = subprocess.run(["bin/canidae", "test/strings/escape_newline.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 3
+    assert lines[0] == "hello"
+    assert lines[1] == "world"
+    assert lines[2] == ""
+
+def test_escape_tab():
+    completed = subprocess.run(["bin/canidae", "test/strings/escape_tab.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "a\tb"
+    assert lines[1] == ""
+
+def test_escape_quote():
+    completed = subprocess.run(["bin/canidae", "test/strings/escape_quote.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == 'say "hello"'
+    assert lines[1] == ""
+
+def test_escape_backslash():
+    completed = subprocess.run(["bin/canidae", "test/strings/escape_backslash.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "back\\slash"
+    assert lines[1] == ""
+
+def test_escape_cr():
+    completed = subprocess.run(["bin/canidae", "test/strings/escape_cr.can"], capture_output=True)
+    assert completed.returncode == 0
+    assert completed.stdout == b"a\rb\n"
+
+def test_escape_single_quote():
+    completed = subprocess.run(["bin/canidae", "test/strings/escape_single_quote.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "it's"
+    assert lines[1] == ""
+
 def string_comparison():
     completed = subprocess.run(["bin/canidae",  "test/strings/string_comparison.can"], text=True, capture_output=True)
     assert completed.returncode == 0

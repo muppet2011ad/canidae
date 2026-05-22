@@ -487,7 +487,28 @@ static void number(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
 }
 
 static void string(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
-    emit_constant(p, c, OBJ_VAL(copy_string(vm, p->prev.start + 1, p->prev.length -2)));
+    const char *src = p->prev.start + 1;
+    size_t src_len = p->prev.length - 2;
+    char *buf = malloc(src_len + 1);
+    size_t out = 0;
+    for (size_t i = 0; i < src_len; i++) {
+        if (src[i] == '\\' && i + 1 < src_len) {
+            i++;
+            switch (src[i]) {
+                case 'n':  buf[out++] = '\n'; break;
+                case 'r':  buf[out++] = '\r'; break;
+                case 't':  buf[out++] = '\t'; break;
+                case '\'': buf[out++] = '\''; break;
+                case '"':  buf[out++] = '"';  break;
+                case '\\': buf[out++] = '\\'; break;
+                default:   buf[out++] = '\\'; buf[out++] = src[i]; break;
+            }
+        } else {
+            buf[out++] = src[i];
+        }
+    }
+    emit_constant(p, c, OBJ_VAL(copy_string(vm, buf, out)));
+    free(buf);
 }
 
 static void assign_with_op(parser *p, compiler *c, VM *vm, uint8_t var_or_arr, uint32_t arg, opcode get_op, opcode set_op, opcode op, uint8_t can_eval_expr) {
