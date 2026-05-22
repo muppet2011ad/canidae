@@ -1,13 +1,10 @@
-let NL = "
-";
-
 function split_lines(content) {
     let lines = [];
     let current = "";
     let i = 0;
     while i < len(content) do {
         let c = content[i];
-        if c == NL then {
+        if c == "\n" then {
             lines[len(lines)] = current;
             current = "";
         } else {
