@@ -1,0 +1,1 @@
+print read_file("test/stdlib/read_file_fixture.txt");

@@ -1,0 +1,5 @@
+try {
+    read_file("test/stdlib/nonexistent_file.txt");
+} catch ValueError as e then {
+    print e.message;
+}

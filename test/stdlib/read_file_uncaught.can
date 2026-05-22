@@ -1,0 +1,1 @@
+read_file("test/stdlib/nonexistent_file.txt");

@@ -50,6 +50,41 @@ static value clock_native(VM *vm, uint8_t argc, value *args) {
     return NUMBER_VAL(((double)clock()/CLOCKS_PER_SEC));
 }
 
+static value read_file_native(VM *vm, uint8_t argc, value *args) {
+    if (argc != 1) {
+        if (!runtime_error(vm, ARGUMENT_ERROR, "Function 'read_file' expects 1 argument (got %u).", argc)) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    if (!IS_STRING(args[0])) {
+        if (!runtime_error(vm, TYPE_ERROR, "Function 'read_file' expects a string filename.")) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    const char *path = AS_CSTRING(args[0]);
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        if (!runtime_error(vm, VALUE_ERROR, "Could not open file '%s'.", path)) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    fseek(f, 0L, SEEK_END);
+    long file_size = ftell(f);
+    rewind(f);
+    if (file_size < 0) {
+        fclose(f);
+        if (!runtime_error(vm, VALUE_ERROR, "Could not determine size of file '%s'.", path)) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    char *buffer = ALLOCATE(vm, char, (size_t)file_size + 1);
+    size_t bytes_read = fread(buffer, sizeof(char), (size_t)file_size, f);
+    fclose(f);
+    if (bytes_read < (size_t)file_size) {
+        FREE_ARRAY(vm, char, buffer, (size_t)file_size + 1);
+        if (!runtime_error(vm, VALUE_ERROR, "Error reading file '%s'.", path)) return NATIVE_ERROR_VAL;
+        return HANDLED_NATIVE_ERROR_VAL;
+    }
+    buffer[bytes_read] = '\0';
+    return OBJ_VAL(take_string(vm, buffer, bytes_read));
+}
+
 static value exception_native(VM *vm, uint8_t argc, value *args) {
     // Starts with checking the arguments to make sure we can continue
     if (argc != 2) {
@@ -81,5 +116,6 @@ void define_stdlib(VM *vm) {
         define_native_global(vm, error_strings[i], ERROR_TYPE_VAL(i));
     }
     define_native(vm, "exception", exception_native);
+    define_native(vm, "read_file", read_file_native);
     enable_gc(vm);
 }
