@@ -110,6 +110,10 @@ static void free_object(VM *vm, object *obj) {
             FREE(vm, object_bound_method, obj);
             break;
         }
+        case OBJ_BOUND_NATIVE: {
+            FREE(vm, object_bound_native, obj);
+            break;
+        }
         case OBJ_NAMESPACE: {
             object_namespace *namespace = (object_namespace*) obj;
             destroy_hashmap(&namespace->values, vm);
@@ -150,6 +154,9 @@ static void mark_roots(VM *vm) {
     mark_object(vm, (object*)vm->message_string);
     mark_object(vm, (object*)vm->type_string);
 
+    mark_object(vm, (object*)vm->push_string);
+    mark_object(vm, (object*)vm->pop_string);
+    mark_object(vm, (object*)vm->contains_string);
     mark_object(vm, (object*)vm->exception_stack);
 }
 
@@ -204,6 +211,11 @@ static void blacken_object(VM *vm, object *obj) {
             object_bound_method *bound = (object_bound_method*) obj;
             mark_value(vm, bound->receiver);
             mark_object(vm, (object*) bound->method);
+            break;
+        }
+        case OBJ_BOUND_NATIVE: {
+            object_bound_native *bound = (object_bound_native*) obj;
+            mark_value(vm, bound->receiver);
             break;
         }
         case OBJ_NAMESPACE: {

@@ -77,6 +77,13 @@ object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *me
     return bound;
 }
 
+object_bound_native *new_bound_native(VM *vm, value receiver, bound_native_function function) {
+    object_bound_native *bound = ALLOCATE_OBJ(vm, object_bound_native, OBJ_BOUND_NATIVE);
+    bound->receiver = receiver;
+    bound->function = function;
+    return bound;
+}
+
 object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source) {
     object_namespace *namespace = ALLOCATE_OBJ(vm, object_namespace, OBJ_NAMESPACE);
     namespace->name = name;
@@ -236,6 +243,9 @@ void print_object(value v) {
             break;
         case OBJ_BOUND_METHOD:
             print_function(AS_BOUND_METHOD(v)->method->function);
+            break;
+        case OBJ_BOUND_NATIVE:
+            printf("<native method>");
             break;
         case OBJ_NAMESPACE:
             printf("<namespace %s>", AS_NAMESPACE(v)->name->chars);

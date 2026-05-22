@@ -106,3 +106,48 @@ def test_array_many_types():
     assert len(lines) == 2
     assert lines[0] == '[null, 0, 1, , Hello, [0, F], true]'
     assert lines[1] == ""
+
+def test_array_push():
+    completed = subprocess.run(["bin/canidae", "test/arrays/array_push.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 3
+    assert lines[0] == "[1, 2, 3, 4]"
+    assert lines[1] == "[1, 2, 3, 4, hello]"
+    assert lines[2] == ""
+
+def test_array_pop():
+    completed = subprocess.run(["bin/canidae", "test/arrays/array_pop.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 3
+    assert lines[0] == "3"
+    assert lines[1] == "[1, 2]"
+    assert lines[2] == ""
+
+def test_array_pop_empty():
+    completed = subprocess.run(["bin/canidae", "test/arrays/array_pop_empty.can"], text=True, capture_output=True)
+    assert completed.returncode == 70
+    lines = completed.stderr.split("\n")
+    assert len(lines) == 4
+    assert "Cannot pop from empty array." in lines[0]
+    assert lines[2].startswith("\t[line 2]")
+    assert lines[3] == ""
+
+def test_array_contains():
+    completed = subprocess.run(["bin/canidae", "test/arrays/array_contains.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 4
+    assert lines[0] == "true"
+    assert lines[1] == "false"
+    assert lines[2] == "false"
+    assert lines[3] == ""
+
+def test_array_method_first_class():
+    completed = subprocess.run(["bin/canidae", "test/arrays/array_method_first_class.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "[1, 2, 3]"
+    assert lines[1] == ""

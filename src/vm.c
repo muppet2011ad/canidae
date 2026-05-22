@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "object.h"
 #include "stdlib_canidae.h"
+#include "stdlib_arrays.h"
 #include "type_conversions.h"
 
 static void reset_stack(VM *vm) {
@@ -150,6 +151,9 @@ void init_VM(VM *vm) {
     vm->div_string = NULL;
     vm->pow_string = NULL;
     vm->mod_string = NULL;
+    vm->push_string = NULL;
+    vm->pop_string = NULL;
+    vm->contains_string = NULL;
     vm->len_string = NULL;
     vm->message_string = NULL;
     vm->type_string = NULL;
@@ -163,6 +167,9 @@ void init_VM(VM *vm) {
     vm->div_string = copy_string(vm, "__div__", 7);
     vm->pow_string = copy_string(vm, "__pow__", 7);
     vm->mod_string = copy_string(vm, "__mod__", 7);
+    vm->push_string = copy_string(vm, "push", 4);
+    vm->pop_string = copy_string(vm, "pop", 3);
+    vm->contains_string = copy_string(vm, "contains", 8);
     vm->len_string = copy_string(vm, "__len__", 7);
     vm->message_string = copy_string(vm, "message", 7);
     vm->type_string = copy_string(vm, "type", 4);
@@ -408,6 +415,18 @@ static uint8_t call_value(VM *vm, value callee, uint8_t argc) {
                 vm->stack_ptr[-argc - 1] = bound->receiver;
                 return call(vm, bound->method, argc);
             }
+            case OBJ_BOUND_NATIVE: {
+                object_bound_native *bound = AS_BOUND_NATIVE(callee);
+                disable_gc(vm);
+                value result = bound->function(vm, bound->receiver, argc, vm->stack_ptr - argc);
+                enable_gc(vm);
+                if (IS_NATIVE_ERROR(result)) return 0;
+                if (IS_HANDLED_NATIVE_ERROR(result)) return 1;
+                vm->stack_ptr -= argc + 1;
+                push(vm, result);
+                FREE(vm, char, ALLOCATE(vm, char, 1));
+                return 1;
+            }
             default: {
                 return runtime_error(vm, TYPE_ERROR, "Can only call functions.");
             }
@@ -437,6 +456,25 @@ static uint8_t invoke(VM *vm, object_string *name, uint8_t argc) {
         else {
             return runtime_error(vm, NAME_ERROR, "Could not find '%s' in namespace '%s'.", name->chars, namespace->name->chars);
         }
+    }
+
+    if (IS_ARRAY(receiver)) {
+        bound_native_function fn = NULL;
+        if (name == vm->push_string) fn = array_push_native;
+        else if (name == vm->pop_string) fn = array_pop_native;
+        else if (name == vm->contains_string) fn = array_contains_native;
+        if (fn == NULL) {
+            return runtime_error(vm, NAME_ERROR, "Arrays do not have method '%s'.", name->chars);
+        }
+        disable_gc(vm);
+        value result = fn(vm, receiver, argc, vm->stack_ptr - argc);
+        enable_gc(vm);
+        if (IS_NATIVE_ERROR(result)) return 0;
+        if (IS_HANDLED_NATIVE_ERROR(result)) return 1;
+        vm->stack_ptr -= argc + 1;
+        push(vm, result);
+        FREE(vm, char, ALLOCATE(vm, char, 1));
+        return 1;
     }
 
     if (!IS_INSTANCE(receiver)) {
@@ -1118,11 +1156,25 @@ static interpret_result run(VM *vm) {
             }
             case OP_GET_PROPERTY: {
                 value obj = peek(vm, 0);
-                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj) || IS_EXCEPTION(obj))) {
-                    if(!runtime_error(vm, TYPE_ERROR, "Only instances, namespaces and exceptions have properties.")) return INTERPRET_RUNTIME_ERROR;
+                if (!(IS_INSTANCE(obj) || IS_NAMESPACE(obj) || IS_EXCEPTION(obj) || IS_ARRAY(obj))) {
+                    if(!runtime_error(vm, TYPE_ERROR, "Only instances, namespaces, exceptions and arrays have properties.")) return INTERPRET_RUNTIME_ERROR;
                     continue;
                 }
-                if (IS_INSTANCE(obj)) {
+                if (IS_ARRAY(obj)) {
+                    object_string *name = READ_STRING(READ_VARIABLE_CONST());
+                    bound_native_function fn = NULL;
+                    if (name == vm->push_string) fn = array_push_native;
+                    else if (name == vm->pop_string) fn = array_pop_native;
+                    else if (name == vm->contains_string) fn = array_contains_native;
+                    if (fn == NULL) {
+                        if (!runtime_error(vm, NAME_ERROR, "Arrays do not have property '%s'.", name->chars)) return INTERPRET_RUNTIME_ERROR;
+                        continue;
+                    }
+                    object_bound_native *bound = new_bound_native(vm, peek(vm, 0), fn);
+                    pop(vm);
+                    push(vm, OBJ_VAL(bound));
+                }
+                else if (IS_INSTANCE(obj)) {
                     object_instance *instance = AS_INSTANCE(peek(vm, 0));
                     object_string *name = READ_STRING(READ_VARIABLE_CONST());
 

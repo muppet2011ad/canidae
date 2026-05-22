@@ -16,6 +16,7 @@
 #define IS_CLASS(v) is_obj_type(v, OBJ_CLASS)
 #define IS_INSTANCE(v) is_obj_type(v, OBJ_INSTANCE)
 #define IS_BOUND_METHOD(v) is_obj_type(v, OBJ_BOUND_METHOD)
+#define IS_BOUND_NATIVE(v) is_obj_type(v, OBJ_BOUND_NATIVE)
 #define IS_NAMESPACE(v) is_obj_type(v, OBJ_NAMESPACE)
 #define IS_EXCEPTION(v) is_obj_type(v, OBJ_EXCEPTION)
 
@@ -28,6 +29,7 @@
 #define AS_CLASS(v) ((object_class*)AS_OBJ(v))
 #define AS_INSTANCE(v) ((object_instance*) AS_OBJ(v))
 #define AS_BOUND_METHOD(v) ((object_bound_method*) AS_OBJ(v))
+#define AS_BOUND_NATIVE(v) ((object_bound_native*) AS_OBJ(v))
 #define AS_NAMESPACE(v) ((object_namespace*) AS_OBJ(v))
 #define AS_EXCEPTION(v) ((object_exception*) AS_OBJ(v))
 
@@ -41,11 +43,13 @@ typedef enum {
     OBJ_CLASS,
     OBJ_INSTANCE,
     OBJ_BOUND_METHOD,
+    OBJ_BOUND_NATIVE,
     OBJ_NAMESPACE,
     OBJ_EXCEPTION,
 } object_type;
 
 typedef value (*native_function)(VM *vm, uint8_t argc, value *argv);
+typedef value (*bound_native_function)(VM *vm, value receiver, uint8_t argc, value *argv);
 
 struct object {
     object_type type;
@@ -110,6 +114,12 @@ struct object_bound_method {
     object_closure *method;
 };
 
+struct object_bound_native {
+    object obj;
+    value receiver;
+    bound_native_function function;
+};
+
 struct object_namespace {
     object obj;
     object_string *name;
@@ -131,6 +141,7 @@ object_upvalue *new_upvalue(VM *vm, value *slot);
 object_class *new_class(VM *vm, object_string *name);
 object_instance *new_instance(VM *vm, object_class *class_);
 object_bound_method *new_bound_method(VM *vm, value receiver, object_closure *method);
+object_bound_native *new_bound_native(VM *vm, value receiver, bound_native_function function);
 object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source);
 object_exception *new_exception(VM *vm, object_string *message, error_type type, size_t line);
 object_string *take_string(VM *vm, char *chars, size_t length);
