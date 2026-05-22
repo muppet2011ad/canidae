@@ -1,0 +1,333 @@
+let NL = "
+";
+
+function split_lines(content) {
+    let lines = [];
+    let current = "";
+    let i = 0;
+    while i < len(content) do {
+        let c = content[i];
+        if c == NL then {
+            lines[len(lines)] = current;
+            current = "";
+        } else {
+            current = current + c;
+        }
+        i++;
+    }
+    if len(current) > 0 then {
+        lines[len(lines)] = current;
+    }
+    return lines;
+}
+
+function box_start(x) {
+    if x < 3 then return 0;
+    if x < 6 then return 3;
+    return 6;
+}
+
+function print_grid(grid) {
+    let row = 0;
+    while row < 9 do {
+        if row == 3 or row == 6 then {
+            print "------+-------+------";
+        }
+        let line = "";
+        let col = 0;
+        while col < 9 do {
+            if col == 3 or col == 6 then {
+                line = line + "| ";
+            }
+            let val = grid[row][col];
+            if val == 0 then {
+                line = line + ". ";
+            } else {
+                line = line + str(val) + " ";
+            }
+            col++;
+        }
+        print line;
+        row++;
+    }
+}
+
+function copy_grid(grid) {
+    let g = [];
+    let r = 0;
+    while r < 9 do {
+        let row = [];
+        let c = 0;
+        while c < 9 do {
+            row[c] = grid[r][c];
+            c++;
+        }
+        g[r] = row;
+        r++;
+    }
+    return g;
+}
+
+function copy_into(dest, src) {
+    let r = 0;
+    while r < 9 do {
+        let c = 0;
+        while c < 9 do {
+            dest[r][c] = src[r][c];
+            c++;
+        }
+        r++;
+    }
+}
+
+function is_valid(grid, row, col, n) {
+    let c = 0;
+    while c < 9 do {
+        if grid[row][c] == n then return false;
+        c++;
+    }
+    let r = 0;
+    while r < 9 do {
+        if grid[r][col] == n then return false;
+        r++;
+    }
+    let br = box_start(row);
+    let bc = box_start(col);
+    r = 0;
+    while r < 3 do {
+        c = 0;
+        while c < 3 do {
+            if grid[br + r][bc + c] == n then return false;
+            c++;
+        }
+        r++;
+    }
+    return true;
+}
+
+// Fill naked singles and hidden singles until stable.
+// Returns false on contradiction.
+function propagate(grid) {
+    let changed = true;
+    while changed do {
+        changed = false;
+
+        // Naked singles: a cell with only one valid value
+        {
+            let row = 0;
+            while row < 9 do {
+                let col = 0;
+                while col < 9 do {
+                    if grid[row][col] == 0 then {
+                        let count = 0;
+                        let last = 0;
+                        let n = 1;
+                        while n <= 9 do {
+                            if is_valid(grid, row, col, n) then {
+                                count++;
+                                last = n;
+                            }
+                            n++;
+                        }
+                        if count == 0 then return false;
+                        if count == 1 then {
+                            grid[row][col] = last;
+                            changed = true;
+                        }
+                    }
+                    col++;
+                }
+                row++;
+            }
+        }
+
+        // Hidden singles in rows: a value that fits in only one cell of a row
+        {
+            let v = 1;
+            while v <= 9 do {
+                let row = 0;
+                while row < 9 do {
+                    let count = 0;
+                    let fc = -1;
+                    let col = 0;
+                    while col < 9 do {
+                        if grid[row][col] == 0 and is_valid(grid, row, col, v) then {
+                            count++;
+                            fc = col;
+                        }
+                        col++;
+                    }
+                    if count == 1 then {
+                        grid[row][fc] = v;
+                        changed = true;
+                    }
+                    row++;
+                }
+                v++;
+            }
+        }
+
+        // Hidden singles in columns
+        {
+            let v = 1;
+            while v <= 9 do {
+                let col = 0;
+                while col < 9 do {
+                    let count = 0;
+                    let fr = -1;
+                    let row = 0;
+                    while row < 9 do {
+                        if grid[row][col] == 0 and is_valid(grid, row, col, v) then {
+                            count++;
+                            fr = row;
+                        }
+                        row++;
+                    }
+                    if count == 1 then {
+                        grid[fr][col] = v;
+                        changed = true;
+                    }
+                    col++;
+                }
+                v++;
+            }
+        }
+
+        // Hidden singles in 3x3 boxes
+        {
+            let v = 1;
+            while v <= 9 do {
+                let br = 0;
+                while br < 9 do {
+                    let bc = 0;
+                    while bc < 9 do {
+                        let count = 0;
+                        let fr = -1;
+                        let fc = -1;
+                        let r = 0;
+                        while r < 3 do {
+                            let c = 0;
+                            while c < 3 do {
+                                let rr = br + r;
+                                let cc = bc + c;
+                                if grid[rr][cc] == 0 and is_valid(grid, rr, cc, v) then {
+                                    count++;
+                                    fr = rr;
+                                    fc = cc;
+                                }
+                                c++;
+                            }
+                            r++;
+                        }
+                        if count == 1 then {
+                            grid[fr][fc] = v;
+                            changed = true;
+                        }
+                        bc = bc + 3;
+                    }
+                    br = br + 3;
+                }
+                v++;
+            }
+        }
+    }
+    return true;
+}
+
+// MRV: pick the empty cell with the fewest valid values.
+// Returns [-1,-1] if none (solved), [-2,-2] if some cell has no valid value.
+function find_best_cell(grid) {
+    let best_row = -1;
+    let best_col = -1;
+    let best_count = 10;
+    let row = 0;
+    while row < 9 do {
+        let col = 0;
+        while col < 9 do {
+            if grid[row][col] == 0 then {
+                let count = 0;
+                let n = 1;
+                while n <= 9 do {
+                    if is_valid(grid, row, col, n) then count++;
+                    n++;
+                }
+                if count == 0 then return [-2, -2];
+                if count < best_count then {
+                    best_count = count;
+                    best_row = row;
+                    best_col = col;
+                }
+            }
+            col++;
+        }
+        row++;
+    }
+    return [best_row, best_col];
+}
+
+// Solves grid (a working copy) in place. Returns true on success.
+function try_solve(grid) {
+    if !propagate(grid) then return false;
+    let cell = find_best_cell(grid);
+    if cell[0] == -2 then return false;
+    if cell[0] == -1 then return true;
+    let row = cell[0];
+    let col = cell[1];
+    let n = 1;
+    while n <= 9 do {
+        if is_valid(grid, row, col, n) then {
+            let g = copy_grid(grid);
+            g[row][col] = n;
+            if try_solve(g) then {
+                copy_into(grid, g);
+                return true;
+            }
+        }
+        n++;
+    }
+    return false;
+}
+
+function solve(grid) {
+    let g = copy_grid(grid);
+    if try_solve(g) then {
+        copy_into(grid, g);
+        return true;
+    }
+    return false;
+}
+
+let content = read_file("sudoku_project/puzzles_hard.txt");
+let lines = split_lines(content);
+
+let puzzle_num = 1;
+let total = len(lines);
+let i = 0;
+while i < total do {
+    let line = lines[i];
+
+    let grid = [];
+    let pos = 0;
+    let row = 0;
+    while row < 9 do {
+        let grid_row = [];
+        let col = 0;
+        while col < 9 do {
+            grid_row[col] = num(line[pos]);
+            col++;
+            pos++;
+        }
+        grid[row] = grid_row;
+        row++;
+    }
+
+    print "Puzzle " + str(puzzle_num) + " of " + str(total) + ":";
+    print_grid(grid);
+    solve(grid);
+    print "Solution:";
+    print_grid(grid);
+    print "========================";
+
+    puzzle_num++;
+    i++;
+}
