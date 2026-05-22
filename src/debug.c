@@ -232,6 +232,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return jump_instruction("OP_JUMP_IF_FALSE", s, 1, offset);
         case OP_JUMP_IF_TRUE:
             return jump_instruction("OP_JUMP_IF_TRUE", s, 1, offset);
+        case OP_JUMP_IF_NOT_NULL_UNDEFINED:
+            return jump_instruction("OP_JUMP_IF_NOT_NULL_UNDEFINED", s, 1, offset);
         case OP_JUMP:
             return jump_instruction("OP_JUMP", s, 1, offset);
         case OP_LOOP:

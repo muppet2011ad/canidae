@@ -1,0 +1,9 @@
+let a = null;
+a ??= "assigned";
+print a;
+let b = "original";
+b ??= "not assigned";
+print b;
+let c = undefined;
+c ??= 42;
+print c;

@@ -74,6 +74,7 @@ typedef struct compiler {
 typedef enum {
     PREC_NONE,
     PREC_ASSIGNMENT,
+    PREC_COALESCE,
     PREC_OR,
     PREC_AND,
     PREC_EQUALITY,
@@ -568,6 +569,23 @@ static uint8_t handle_assignment(parser *p, compiler *c, VM *vm, uint8_t var_or_
         assign_with_op(p, c, vm, var_or_arr, arg, get_op, set_op, OP_MODULO, 1);
         return 1;
     }
+    else if (match(p, TOKEN_QUESTION_QUESTION_EQUAL)) {
+        if (var_or_arr) {
+            emit_byte(p, c, get_op);
+        } else {
+            emit_variable_length_instruction(p, c, get_op, arg);
+        }
+        size_t skip_jump = emit_jump(p, c, OP_JUMP_IF_NOT_NULL_UNDEFINED);
+        emit_byte(p, c, OP_POP);
+        expression(p, c, vm);
+        if (var_or_arr) {
+            emit_byte(p, c, set_op);
+        } else {
+            emit_variable_length_instruction(p, c, set_op, arg);
+        }
+        patch_jump(p, c, skip_jump);
+        return 1;
+    }
     else if (match(p, TOKEN_PLUS_PLUS)) {
         assign_with_op(p, c, vm, var_or_arr, arg, get_op, set_op, OP_ADD, 0);
         return 1;
@@ -909,6 +927,13 @@ static uint8_t argument_list(parser *p, compiler *c, VM *vm) {
     return argc;
 }
 
+static void coalesce(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
+    size_t skip_jump = emit_jump(p, c, OP_JUMP_IF_NOT_NULL_UNDEFINED);
+    emit_byte(p, c, OP_POP);
+    parse_precedence(p, c, vm, PREC_COALESCE);
+    patch_jump(p, c, skip_jump);
+}
+
 static void and_(parser *p, compiler *c, VM *vm, uint8_t can_assign) {
     size_t end_jump = emit_jump(p, c, OP_JUMP_IF_FALSE);
     emit_byte(p, c, OP_POP);
@@ -1195,6 +1220,7 @@ parse_rule rules[] = {
     [TOKEN_STRING] = {string, NULL, PREC_NONE},
     [TOKEN_NUMBER] = {number, NULL, PREC_NONE},
     [TOKEN_AND] = {NULL, and_, PREC_AND},
+    [TOKEN_QUESTION_QUESTION] = {NULL, coalesce, PREC_COALESCE},
     [TOKEN_CLASS] = {type, NULL, PREC_NONE},
     [TOKEN_ELSE] = {NULL, NULL, PREC_NONE},
     [TOKEN_FALSE] = {literal, NULL, PREC_NONE},

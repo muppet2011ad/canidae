@@ -21,6 +21,7 @@ typedef enum {
     OP_DIVIDE,
     OP_POWER,
     OP_MODULO,
+    OP_JUMP_IF_NOT_NULL_UNDEFINED,
     OP_UNDEFINED,
     OP_NULL,
     OP_TRUE,

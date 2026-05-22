@@ -301,6 +301,9 @@ token scan_token(scanner *s) {
             return make_token(s, match(s, '=') ? TOKEN_CARET_EQUAL : TOKEN_CARET);
         case '%':
             return make_token(s, match(s, '=') ? TOKEN_PERCENT_EQUAL : TOKEN_PERCENT);
+        case '?':
+            if (match(s, '?')) return make_token(s, match(s, '=') ? TOKEN_QUESTION_QUESTION_EQUAL : TOKEN_QUESTION_QUESTION);
+            return error_token(s, "Unexpected character.");
         case '!':
             return make_token(s, match(s, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '=':

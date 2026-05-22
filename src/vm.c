@@ -1081,6 +1081,11 @@ static interpret_result run(VM *vm) {
                 if (!is_falsey(peek(vm, 0))) vm->active_frame->ip += offset;
                 break;
             }
+            case OP_JUMP_IF_NOT_NULL_UNDEFINED: {
+                uint64_t offset = READ_UINT40();
+                if (!IS_NULL(peek(vm, 0)) && !IS_UNDEFINED(peek(vm, 0))) vm->active_frame->ip += offset;
+                break;
+            }
             case OP_JUMP: {
                 uint64_t offset = READ_UINT40();
                 vm->active_frame->ip += offset;

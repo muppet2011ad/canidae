@@ -1,0 +1,5 @@
+print null ?? "default";
+print undefined ?? "default";
+print "value" ?? "default";
+print 0 ?? "default";
+print false ?? "default";

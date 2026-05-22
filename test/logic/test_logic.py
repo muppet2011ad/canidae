@@ -110,4 +110,26 @@ def test_logic_operators():
     assert lines[14] == "false"
     assert lines[15] == "1"
     assert lines[16] == ""
+
+def test_coalesce():
+    completed = subprocess.run(["bin/canidae", "test/logic/coalesce.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 6
+    assert lines[0] == "default"   # null ?? "default"
+    assert lines[1] == "default"   # undefined ?? "default"
+    assert lines[2] == "value"     # "value" ?? "default"
+    assert lines[3] == "0"         # 0 ?? "default" - falsey but not null/undefined
+    assert lines[4] == "false"     # false ?? "default" - falsey but not null/undefined
+    assert lines[5] == ""
+
+def test_coalesce_assignment():
+    completed = subprocess.run(["bin/canidae", "test/logic/coalesce_assignment.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 4
+    assert lines[0] == "assigned"  # null ??= "assigned"
+    assert lines[1] == "original"  # "original" ??= "not assigned"
+    assert lines[2] == "42"        # undefined ??= 42
+    assert lines[3] == ""
     
