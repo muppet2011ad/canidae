@@ -192,6 +192,8 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return long_instruction("OP_LONG", s, offset);
         case OP_INHERIT:
             return simple_instruction("OP_INHERIT", offset);
+        case OP_LEN:
+            return simple_instruction("OP_LEN", offset);
         case OP_TYPEOF:
             return simple_instruction("OP_TYPEOF", offset);
         case OP_UNREGISTER_CATCH:
