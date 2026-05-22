@@ -1,0 +1,134 @@
+let NL = "
+";
+
+function split_lines(content) {
+    let lines = [];
+    let current = "";
+    let i = 0;
+    while i < len(content) do {
+        let c = content[i];
+        if c == NL then {
+            lines[len(lines)] = current;
+            current = "";
+        } else {
+            current = current + c;
+        }
+        i++;
+    }
+    if len(current) > 0 then {
+        lines[len(lines)] = current;
+    }
+    return lines;
+}
+
+function box_start(x) {
+    if x < 3 then return 0;
+    if x < 6 then return 3;
+    return 6;
+}
+
+function print_grid(grid) {
+    let row = 0;
+    while row < 9 do {
+        if row == 3 or row == 6 then {
+            print "------+-------+------";
+        }
+        let line = "";
+        let col = 0;
+        while col < 9 do {
+            if col == 3 or col == 6 then {
+                line = line + "| ";
+            }
+            let val = grid[row][col];
+            if val == 0 then {
+                line = line + ". ";
+            } else {
+                line = line + str(val) + " ";
+            }
+            col++;
+        }
+        print line;
+        row++;
+    }
+}
+
+function is_valid(grid, row, col, n) {
+    let c = 0;
+    while c < 9 do {
+        if grid[row][c] == n then return false;
+        c++;
+    }
+    let r = 0;
+    while r < 9 do {
+        if grid[r][col] == n then return false;
+        r++;
+    }
+    let br = box_start(row);
+    let bc = box_start(col);
+    r = 0;
+    while r < 3 do {
+        c = 0;
+        while c < 3 do {
+            if grid[br + r][bc + c] == n then return false;
+            c++;
+        }
+        r++;
+    }
+    return true;
+}
+
+function solve(grid) {
+    let row = 0;
+    while row < 9 do {
+        let col = 0;
+        while col < 9 do {
+            if grid[row][col] == 0 then {
+                let n = 1;
+                while n <= 9 do {
+                    if is_valid(grid, row, col, n) then {
+                        grid[row][col] = n;
+                        if solve(grid) then return true;
+                        grid[row][col] = 0;
+                    }
+                    n++;
+                }
+                return false;
+            }
+            col++;
+        }
+        row++;
+    }
+    return true;
+}
+
+let content = read_file("sudoku_project/puzzles.txt");
+let lines = split_lines(content);
+
+let i = 0;
+while i < len(lines) do {
+    let header = lines[i];
+    i++;
+
+    let grid = [];
+    let row = 0;
+    while row < 9 do {
+        let line = lines[i];
+        let grid_row = [];
+        let col = 0;
+        while col < 9 do {
+            grid_row[col] = num(line[col]);
+            col++;
+        }
+        grid[row] = grid_row;
+        row++;
+        i++;
+    }
+
+    print header;
+    print "Puzzle:";
+    print_grid(grid);
+    solve(grid);
+    print "Solution:";
+    print_grid(grid);
+    print "========================";
+}
