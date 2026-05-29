@@ -23,6 +23,8 @@ typedef struct {
     uint8_t *ip;
     value *slots;
     size_t slot_offset;
+    uint8_t is_module_frame;
+    char *saved_source_path;
 } call_frame;
 
 typedef struct VM {

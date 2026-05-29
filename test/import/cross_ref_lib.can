@@ -1,0 +1,7 @@
+function helper(x, y) {
+    return "(" + str(x) + ", " + str(y) + ")";
+}
+
+function make_and_describe(x, y) {
+    return "Point: " + helper(x, y);
+}

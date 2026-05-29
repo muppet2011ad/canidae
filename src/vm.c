@@ -184,29 +184,6 @@ void destroy_VM(VM *vm) {
     vm->init_string = NULL;
 }
 
-void merge_VM_heaps(VM *primary, VM *secondary) {
-    // Used in importing - ownership of objects in the secondary VM is transferred to the primary VM, making it responsible for memory management of those objects.
-    // Allows an import statement to move objects over to the main VM before getting rid of the VM used to process the import.
-    // Assumes the secondary VM is using the same strings table as the primary (necessary for string interning to work) and therefore doesn't need to be freed
-    object *insert_point = primary->objects;
-    object *next = primary->objects->next;
-    while (next != NULL) {
-        insert_point = next;
-        next = next->next; // Get to end of objects list for primary VM
-    }
-    insert_point->next = secondary->objects;
-    secondary->objects = NULL;
-    // Now we need to calculate the memory usage of these objects
-    size_t secondary_memory_usage = secondary->bytes_allocated - (secondary->stack_capacity * sizeof(value)) - (secondary->globals.capacity * sizeof(kv_pair)) - (secondary->strings.capacity * sizeof(kv_pair));
-    primary->bytes_allocated += secondary_memory_usage;
-
-    // Now free everything in the secondary VM
-    free(secondary->stack);
-    free(secondary->grey_stack);
-    free(secondary->source_path);
-    destroy_hashmap(&secondary->globals, secondary);
-    secondary->init_string = NULL;
-}
 
 void enable_gc(VM *vm) {
     vm->gc_allowed = 1;
@@ -298,7 +275,10 @@ static FILE* resolve_import_path(VM *vm, char *path, char **resolved_path) {
         }
     }
     else {
-        *resolved_path = path;
+        size_t path_len = strlen(path);
+        char *path_copy = malloc(path_len + 1);
+        memcpy(path_copy, path, path_len + 1);
+        *resolved_path = path_copy;
         return f;
     }
 }
@@ -328,39 +308,6 @@ static char *read_import_file(VM *vm, char *path, char **script_path) {
     return buffer;
 }
 
-static interpret_result import(VM *vm, object_string *filename, object_string *namespace_name) {
-    char *final_path = NULL;
-    char *source = read_import_file(vm, AS_CSTRING(OBJ_VAL(filename)), &final_path);
-    if (source == NULL) return INTERPRET_RUNTIME_ERROR;
-    VM *temp_vm = malloc(sizeof(VM));
-    init_VM(temp_vm); // Create a VM to interpret our imported code
-    temp_vm->source_path = final_path;
-    destroy_hashmap(&temp_vm->strings, temp_vm);
-    temp_vm->strings = vm->strings;
-    temp_vm->owns_strings = 0;
-
-    interpret_result status = interpret(temp_vm, source); // Run the imported module in this VM
-    free(source);
-    switch (status) {
-        case INTERPRET_COMPILE_ERROR:
-            fprintf(stderr, "Failed to compile module '%s'.", AS_CSTRING(OBJ_VAL(filename)));
-            break;
-        case INTERPRET_RUNTIME_ERROR:
-            fprintf(stderr, "Error in module '%s'.", AS_CSTRING(OBJ_VAL(filename)));
-            break;
-        case INTERPRET_OK: {
-            disable_gc(vm);
-            object_namespace *namespace = new_namespace(vm, namespace_name, &temp_vm->globals);
-            push(vm, OBJ_VAL(namespace));
-            merge_VM_heaps(vm, temp_vm);
-            vm->strings = temp_vm->strings;
-            enable_gc(vm);
-            break;
-        }
-    }
-    free(temp_vm);
-    return status;
-}
 
 static value peek(VM *vm, int distance) {
     return vm->stack_ptr[-1 - distance];
@@ -378,6 +325,8 @@ static uint8_t call(VM *vm, object_closure *closure, uint8_t argc) {
     frame->ip = closure->function->seg.bytecode;
     frame->slots = vm->stack_ptr - argc - 1;
     frame->slot_offset = STACK_LEN(vm) - argc -1;
+    frame->is_module_frame = 0;
+    frame->saved_source_path = NULL;
     return 1;
 }
 
@@ -750,13 +699,17 @@ static interpret_result run(VM *vm) {
             case OP_RETURN:{
                 value result = pop(vm);
                 close_upvalues(vm, vm->active_frame->slots);
+                uint8_t is_mod = vm->active_frame->is_module_frame;
+                char *saved_path = vm->active_frame->saved_source_path;
                 vm->frame_count--;
                 if (vm->frame_count == 0) {
                     pop(vm);
+                    if (is_mod) { free(vm->source_path); vm->source_path = saved_path; }
                     return INTERPRET_OK;
                 }
                 vm->stack_ptr = vm->active_frame->slots;
                 push(vm, result);
+                if (is_mod) { free(vm->source_path); vm->source_path = saved_path; }
                 vm->active_frame = &vm->frames[vm->frame_count - 1];
                 break;
             }
@@ -1016,10 +969,50 @@ static interpret_result run(VM *vm) {
             case OP_IMPORT: {
                 object_string *namespace_name = READ_STRING(READ_VARIABLE_CONST());
                 object_string *filename = AS_STRING(peek(vm, 0));
-                interpret_result result = import(vm, filename, namespace_name);
-                vm->stack_ptr[-2] = vm->stack_ptr[-1];
-                pop(vm);                
-                if (result != INTERPRET_OK) return INTERPRET_RUNTIME_ERROR;
+
+                char *final_path = NULL;
+                char *source = read_import_file(vm, filename->chars, &final_path);
+                if (source == NULL) return INTERPRET_RUNTIME_ERROR;
+
+                object_function *module_fn = compile_module(source, vm);
+                free(source);
+
+                if (module_fn == NULL) {
+                    free(final_path);
+                    if (!runtime_error(vm, IMPORT_ERROR, "Failed to compile module '%s'.", filename->chars)) return INTERPRET_RUNTIME_ERROR;
+                    break;
+                }
+
+                // Replace filename on stack with module closure (keeps module_fn reachable for GC during new_closure)
+                vm->stack_ptr[-1] = OBJ_VAL(module_fn);
+                object_closure *module_closure = new_closure(vm, module_fn);
+                vm->stack_ptr[-1] = OBJ_VAL(module_closure);
+
+                if (!call(vm, module_closure, 0)) {
+                    free(final_path);
+                    return INTERPRET_RUNTIME_ERROR;
+                }
+
+                // Mark this frame as a module call and save/restore source path
+                call_frame *mf = &vm->frames[vm->frame_count - 1];
+                mf->is_module_frame = 1;
+                mf->saved_source_path = vm->source_path;
+                vm->source_path = final_path;
+
+                vm->active_frame = &vm->frames[vm->frame_count - 1];
+                break;
+            }
+            case OP_BUILD_NAMESPACE: {
+                uint8_t n = READ_BYTE();
+                object_string *ns_name = copy_string(vm, "module", 6);
+                object_namespace *ns = new_namespace(vm, ns_name, NULL);
+                push(vm, OBJ_VAL(ns));
+                for (uint8_t i = 0; i < n; i++) {
+                    uint32_t slot_idx = READ_UINT24();
+                    object_string *name = READ_STRING(READ_CONSTANT_LONG());
+                    value val = vm->active_frame->slots[slot_idx];
+                    hashmap_set(&ns->values, vm, name, val);
+                }
                 break;
             }
             case OP_CONSTANT: {

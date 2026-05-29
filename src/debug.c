@@ -277,6 +277,20 @@ size_t dissassemble_instruction(segment *s, size_t offset) {
             return invoke_instruction("OP_INVOKE_SUPER", s, offset, 0);
         case OP_IMPORT:
             return constant_instruction("OP_IMPORT", s, offset);
+        case OP_BUILD_NAMESPACE: {
+            uint8_t n = s->bytecode[offset + 1];
+            printf("%-16s (%u exports)\n", "OP_BUILD_NAMESPACE", n);
+            size_t off = offset + 2;
+            for (uint8_t i = 0; i < n; i++) {
+                uint32_t slot = ((uint32_t)s->bytecode[off] << 16) | ((uint32_t)s->bytecode[off+1] << 8) | s->bytecode[off+2];
+                uint32_t name = ((uint32_t)s->bytecode[off+3] << 16) | ((uint32_t)s->bytecode[off+4] << 8) | s->bytecode[off+5];
+                printf("   |                      slot %u -> '", slot);
+                print_value(s->constants.values[name]);
+                printf("'\n");
+                off += 6;
+            }
+            return off;
+        }
         case OP_REGISTER_CATCH:
             return register_catch_instruction("OP_REGISTER_CATCH", s, offset);
         default:

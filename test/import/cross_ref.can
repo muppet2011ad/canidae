@@ -1,0 +1,6 @@
+// Module that has a helper function called by another function
+// This tests the core fix: cross-function references within a module
+import "cross_ref_lib.can" as lib;
+
+let result = lib.make_and_describe(3, 4);
+print result;

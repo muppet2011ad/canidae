@@ -77,6 +77,7 @@ typedef enum {
     OP_GET_SUPER,
     OP_INVOKE_SUPER, // Variable length with an extra byte for the number of arguments
     OP_IMPORT,
+    OP_BUILD_NAMESPACE, // 1-byte count N, then N * (3-byte slot + 3-byte name constant)
     // One-byte operand followed by 6 byte jump address
     OP_REGISTER_CATCH,
 } opcode;

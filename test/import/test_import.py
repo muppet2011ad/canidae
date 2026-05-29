@@ -35,3 +35,13 @@ def test_needs_identifier():
     assert len(lines) == 2
     assert lines[0].startswith("[line 1] Error at ';'")
     assert lines[1] == ""
+
+def test_cross_ref():
+    # A function in a module calls a sibling function defined in the same module.
+    # This is the core case fixed by closure-based module compilation.
+    completed = subprocess.run(["bin/canidae",  "test/import/cross_ref.can"], text=True, capture_output=True)
+    assert completed.returncode == 0
+    lines = completed.stdout.split("\n")
+    assert len(lines) == 2
+    assert lines[0] == "Point: (3, 4)"
+    assert lines[1] == ""

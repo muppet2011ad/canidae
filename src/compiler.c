@@ -33,6 +33,7 @@ typedef struct {
 typedef enum {
     TYPE_FUNCTION,
     TYPE_SCRIPT,
+    TYPE_MODULE,
     TYPE_METHOD,
     TYPE_INITIALISER,
 } function_type;
@@ -69,6 +70,10 @@ typedef struct compiler {
     uint32_t upvalue_capacity;
     upvalue *upvalues;
     class_compiler *current_class;
+    uint32_t *module_export_slots;
+    uint32_t *module_export_names;
+    uint32_t module_export_count;
+    uint32_t module_export_capacity;
 } compiler;
 
 typedef enum {
@@ -136,6 +141,10 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
     c->upvalue_count = 0;
     c->upvalues = NULL;
     c->current_class = NULL;
+    c->module_export_slots = NULL;
+    c->module_export_names = NULL;
+    c->module_export_count = 0;
+    c->module_export_capacity = 0;
     if (make_function) c->function = new_function(vm);
     token t; // This section of adding a sentinel local gets a bit more complicated because we have to allocate the locals array
     t.start = "";
@@ -148,7 +157,7 @@ static void init_compiler(parser *p, compiler *c, VM *vm, function_type type, to
         l->name.start = "this";
         l->name.length = 4;
     }
-    if (type != TYPE_SCRIPT) {
+    if (type != TYPE_SCRIPT && type != TYPE_MODULE) {
         c->function->name = copy_string(vm, p->prev.start, p->prev.length);
     }
 }
@@ -160,6 +169,8 @@ static void destroy_compiler(compiler *c, VM *vm) {
     }
     FREE_ARRAY(NULL, loop, c->loops, c->loop_capacity);
     FREE_ARRAY(NULL, upvalue, c->upvalues, c->upvalue_capacity);
+    free(c->module_export_slots);
+    free(c->module_export_names);
     init_compiler(NULL, c, vm, TYPE_SCRIPT, NULL, 0);
     free(c->locals);
 }
@@ -342,8 +353,40 @@ static void exit_loop_scope(parser *p, compiler *c) {
     }
 }
 
+static void record_module_export(compiler *c, uint32_t slot, uint32_t name_const) {
+    if (c->module_export_count >= c->module_export_capacity) {
+        uint32_t old = c->module_export_capacity;
+        c->module_export_capacity = old == 0 ? 8 : old * 2;
+        c->module_export_slots = realloc(c->module_export_slots, c->module_export_capacity * sizeof(uint32_t));
+        c->module_export_names = realloc(c->module_export_names, c->module_export_capacity * sizeof(uint32_t));
+    }
+    c->module_export_slots[c->module_export_count] = slot;
+    c->module_export_names[c->module_export_count] = name_const;
+    c->module_export_count++;
+}
+
+static void emit_module_return(parser *p, compiler *c) {
+    if (c->module_export_count > 255) {
+        error(p, "Module has too many top-level declarations (max 255).");
+        return;
+    }
+    uint8_t n = (uint8_t) c->module_export_count;
+    emit_2_bytes(p, c, OP_BUILD_NAMESPACE, n);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t slot = c->module_export_slots[i];
+        uint32_t name = c->module_export_names[i];
+        uint8_t bytes[6] = {slot >> 16, slot >> 8, slot & 0xff, name >> 16, name >> 8, name & 0xff};
+        emit_bytes(p, c, bytes, 6);
+    }
+    emit_byte(p, c, OP_RETURN);
+}
+
 static object_function *end_compiler(parser *p, compiler *c) {
-    emit_return(p, c);
+    if (c->type == TYPE_MODULE) {
+        emit_module_return(p, c);
+    } else {
+        emit_return(p, c);
+    }
     object_function *f = c->function;
     f->upvalue_count = c->upvalue_count;
     #ifdef DEBUG_PRINT_CODE
@@ -911,6 +954,11 @@ static void define_variable(parser *p, compiler *c, uint32_t global) {
         mark_initialised(c);
         return;
     }
+    if (c->type == TYPE_MODULE) {
+        mark_initialised(c);
+        record_module_export(c, (uint32_t)(c->local_count - 1), global);
+        return;
+    }
     emit_variable_length_instruction(p, c, OP_DEFINE_GLOBAL, global);
 }
 
@@ -1028,7 +1076,7 @@ static void print_statement(parser *p, compiler *c, VM *vm) {
 }
 
 static void return_statement(parser *p, compiler *c, VM *vm) {
-    if (c->type == TYPE_SCRIPT) {
+    if (c->type == TYPE_SCRIPT || c->type == TYPE_MODULE) {
         error(p, "Can't return outside of a function.");
     }
     if (match(p, TOKEN_SEMICOLON)) {
@@ -1433,7 +1481,7 @@ static void free_loop(loop l) {
 }
 
 static void declare_variable(parser *p, compiler *c) {
-    if (c->scope_depth == 0) return;
+    if (c->scope_depth == 0 && c->type != TYPE_MODULE) return;
     token *name = &p->prev;
     for (long i = (long) c->local_count - 1; i >= 0; i--) {
         local *l = &c->locals[i];
@@ -1454,11 +1502,12 @@ static uint32_t parse_variable(parser *p, compiler *c, VM *vm, const char *error
     declare_variable(p, c);
     if (c->scope_depth > 0) return 0;
 
+    // In module mode, still return the name constant so define_variable can record the export
     return identifier_constant(p, c, vm, &p->prev);
 }
 
 static void mark_initialised(compiler *c) {
-    if (c->scope_depth == 0) return;
+    if (c->scope_depth == 0 && c->type != TYPE_MODULE) return;
     c->locals[c->local_count - 1].depth = c->scope_depth;
 }
 
@@ -1473,6 +1522,25 @@ object_function *compile(const char* source, VM *vm) {
     init_scanner(&s, source);
     init_parser(&p, &s);
     init_compiler(&p, &c, vm, TYPE_SCRIPT, NULL, 1);
+    disable_gc(vm);
+    advance(&p);
+    while (!match(&p, TOKEN_EOF)) {
+        declaration(&p, &c, vm);
+    }
+    consume(&p, TOKEN_EOF, "Expect end of expression.");
+    object_function *f = end_compiler(&p, &c);
+    destroy_compiler(&c, vm);
+    enable_gc(vm);
+    return p.had_error ? NULL : f;
+}
+
+object_function *compile_module(const char* source, VM *vm) {
+    scanner s;
+    parser p;
+    compiler c;
+    init_scanner(&s, source);
+    init_parser(&p, &s);
+    init_compiler(&p, &c, vm, TYPE_MODULE, NULL, 1);
     disable_gc(vm);
     advance(&p);
     while (!match(&p, TOKEN_EOF)) {

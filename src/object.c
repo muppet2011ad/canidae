@@ -88,7 +88,7 @@ object_namespace *new_namespace(VM *vm, object_string *name, hashmap *source) {
     object_namespace *namespace = ALLOCATE_OBJ(vm, object_namespace, OBJ_NAMESPACE);
     namespace->name = name;
     init_hashmap(&namespace->values);
-    hashmap_copy_all(vm, source, &namespace->values);
+    if (source != NULL) hashmap_copy_all(vm, source, &namespace->values);
     return namespace;
 }
 
@@ -248,7 +248,11 @@ void print_object(value v) {
             printf("<native method>");
             break;
         case OBJ_NAMESPACE:
-            printf("<namespace %s>", AS_NAMESPACE(v)->name->chars);
+            if (AS_NAMESPACE(v)->name != NULL) {
+                printf("<namespace %s>", AS_NAMESPACE(v)->name->chars);
+            } else {
+                printf("<namespace>");
+            }
             break;
         case OBJ_EXCEPTION:{
             char *error_strings[8] = {"NameError", "TypeError", "ValueError", "ImportError", "ArgumentError", "RecursionError", "MemoryError", "IndexError"};
